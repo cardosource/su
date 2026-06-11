@@ -1,3 +1,4 @@
+// tokenType.hpp
 enum class TokenType {
 
   // Tokens de Caracteres Únicos
@@ -29,7 +30,7 @@ enum class TokenType {
   AND, CLASS, ELSE, MY_FALSE, FUN, FOR, IF, NIL, OR,
   PROCLAIM, RETURN, SUPER, THIS, MY_TRUE, VAR, WHILE,
   TYPEOF,
-
+  TO,       
   // Token para final de declaração
   MY_EOF
 

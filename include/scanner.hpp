@@ -30,7 +30,8 @@ class Scanner{
 {"true",      TokenType::MY_TRUE},
 {"var",       TokenType::VAR},
 {"while",     TokenType::WHILE},
-{"typeOf",    TokenType::TYPEOF}
+{"typeOf",    TokenType::TYPEOF},
+{"to",        TokenType::TO}
    };
 
 bool isAlpha(char c);
