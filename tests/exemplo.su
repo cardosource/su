@@ -1,0 +1,238 @@
+
+
+nome    = "Karl";
+idade   = 42;
+altura  = 1.75;
+ativo   = true;
+inativo = false;
+nada    = nil;
+
+proclaim("1. TIPOS");
+proclaim(nome);
+proclaim(idade);
+proclaim(altura);
+proclaim(ativo);
+proclaim(inativo);
+proclaim(nada);
+
+
+proclaim("2. TYPEOF");
+proclaim(typeOf(nome));
+proclaim(typeOf(idade));
+proclaim(typeOf(altura));
+proclaim(typeOf(ativo));
+proclaim(typeOf(nada));
+
+
+proclaim("3. ARITMÉTICA");
+a = 10;
+b = 3;
+
+proclaim(a + b);
+proclaim(a - b);
+proclaim(a * b);
+proclaim(a / b);
+proclaim(10 / 2);
+proclaim(-a);
+proclaim(a + 0.5);
+
+
+proclaim("4. NÚMEROS GRANDES");
+grande  = 99999999999999999999999999999999;
+enorme  = grande * grande;
+proclaim(grande);
+proclaim(enorme);
+
+precisao = 1.0 / 3.0;
+proclaim(precisao);
+
+pi_aprox = 355.0 / 113.0;
+proclaim(pi_aprox);
+
+
+proclaim("5. STRINGS");
+s1 = "Trabalhadores ";
+s2 = "do mundo, ";
+s3 = "uni-vos!";
+
+proclaim(s1 + s2 + s3);
+proclaim("Idade: " + idade);
+proclaim("Altura: " + altura);
+proclaim("Ativo: " + ativo);
+proclaim("Nada: " + nada);
+
+
+proclaim("6. INSERÇÃO EM STRING");
+
+proclaim("nome: #nome");
+proclaim("idade: #idade");
+proclaim("altura: #altura");
+proclaim("ativo: #ativo");
+
+proclaim("#{nome} tem #idade anos e #{altura}m de altura");
+proclaim("tipo de nome: #{typeOf(nome)}");
+proclaim("tipo de idade: #{typeOf(idade)}");
+proclaim("a + b = #{a + b}");
+proclaim("a * b = #{a * b}");
+proclaim("grande numero: #grande");
+proclaim("pi aprox: #pi_aprox");
+
+
+proclaim("7. COMPARAÇÕES");
+proclaim(10 == 10);
+proclaim(10 == 10.0);
+proclaim(10 != 5);
+proclaim(10 > 5);
+proclaim(10 >= 10);
+proclaim(3 < 1);
+proclaim(3 <= 3);
+proclaim("a" == "a");
+proclaim("a" == "b");
+
+
+proclaim("8. LÓGICA");
+proclaim(true and true);
+proclaim(true and false);
+proclaim(false or true);
+proclaim(false or false);
+proclaim(!true);
+proclaim(!false);
+proclaim(!nil);
+
+
+proclaim("9. IF / ELSE IF / ELSE");
+x = 15;
+
+if(x > 20){
+    proclaim("x maior que 20");
+} else if(x > 10){
+    proclaim("x entre 10 e 20");
+} else if(x == 10){
+    proclaim("x é exatamente 10");
+} else {
+    proclaim("x menor que 10");
+}
+
+
+proclaim("10. IF COM LÓGICA COMPOSTA");
+y = 8;
+
+if(y > 5 and y < 10){
+    proclaim("y está entre 5 e 10");
+}
+if(y == 0 or y == 8){
+    proclaim("y é 0 ou 8");
+}
+if(!(y == 0)){
+    proclaim("y não é zero");
+}
+
+
+proclaim("11. COMPARAÇÃO DE TIPOS");
+v1 = 42;
+v2 = 99;
+v3 = 3.14;
+v4 = "texto";
+
+if(typeOf(v1) == typeOf(v2)){
+    proclaim("v1 e v2: mesmo tipo → #{typeOf(v1)}");
+}
+if(typeOf(v1) != typeOf(v3)){
+    proclaim("v1 é #{typeOf(v1)}, v3 é #{typeOf(v3)}");
+}
+if(typeOf(v4) == "str"){
+    proclaim("v4 é uma string: #v4");
+}
+if(typeOf(v3) == "float"){
+    proclaim("v3 é float: #v3");
+}
+
+
+proclaim("12. BLOCOS E ESCOPO");
+externo = 100;
+
+{
+    externo = 200;
+    interno = "só no bloco";
+    proclaim("externo dentro do bloco: #externo");
+    proclaim("interno: #interno");
+    {
+        profundo = "nível 2";
+        proclaim("profundo: #profundo");
+        proclaim("externo no nível 2: #externo");
+    }
+}
+
+proclaim("externo após bloco: #externo");
+
+
+proclaim("13. ATRIBUIÇÃO");
+c = 5;
+proclaim("c = #c");
+c = c + 10;
+proclaim("c = #c");
+c = c * 2;
+proclaim("c = #c");
+
+
+proclaim("14. ATRIBUIÇÃO COMPOSTA");
+n = 10;
+proclaim("n inicial: #n");
+
+n += 5;
+proclaim("n após +=5: #n");
+
+n -= 3;
+proclaim("n após -=3: #n");
+
+n *= 2;
+proclaim("n após *=2: #n");
+
+n /= 4;
+proclaim("n após /=4: #n");
+
+++n;
+proclaim("n após ++n: #n");
+
+n++;
+proclaim("n após n++: #n");
+
+--n;
+proclaim("n após --n: #n");
+
+n--;
+proclaim("n após n--: #n");
+
+
+proclaim("15. WHILE");
+i = 0;
+while(i < 5){
+    proclaim("while i = #i");
+    i += 1;
+}
+
+
+proclaim("16. FOR crescente");
+for(j = 0; j < 5; j++){
+    proclaim("for j = #j");
+}
+
+proclaim("16. FOR decrescente");
+for(k = 5; k > 0; k--){
+    proclaim("for k = #k");
+}
+
+
+proclaim("17. EXPRESSÕES ANINHADAS");
+resultado = (2 + 3) * (10 - 4);
+proclaim("(2+3)*(10-4) = #resultado");
+proclaim("(10+5)/(2+1) = #{(10 + 5) / (2 + 1)}");
+proclaim("(7+1)/(2+1) = #{(7 + 1) / (2 + 1)}");
+
+
+proclaim("18. CURTO-CIRCUITO");
+proclaim(nil or "padrão");
+proclaim(false or 42);
+proclaim("existe" or "outro");
+proclaim(true and "fim");
+proclaim(false and "nunca");
