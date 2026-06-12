@@ -1,9 +1,8 @@
-name: Pipeline SU
+name: Pipeline SU 
 
 on:
   push:
     branches: [ master, convidado ]
-  workflow_dispatch:
 
 jobs:
   build-and-run:
