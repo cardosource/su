@@ -1,4 +1,4 @@
-name: Pipeline for SU
+name: Pipeline SU
 
 on:
   push:
@@ -18,5 +18,5 @@ jobs:
       - name: make
         run: make
       
-      - name: ./tests/su tests/exemplo.su
+      - name: run
         run: ./tests/su tests/exemplo.su
