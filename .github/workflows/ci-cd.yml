@@ -1,0 +1,22 @@
+name: Pipeline for SU
+
+on:
+  push:
+    branches: [ master, convidado ]
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install build-essential
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      
+      - name: make
+        run: make
+      
+      - name: ./tests/su tests/exemplo.su
+        run: ./tests/su tests/exemplo.su
