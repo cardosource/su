@@ -6,17 +6,17 @@
 #include <unordered_map>
 
 static const std::unordered_map<std::string, std::string> explanations = {
-
+  // comando desconhecido
   {"is not a recognized command in .su",
    "Check the .su documentation for valid commands. Known commands: proclaim(), if, while, for."},
 
-  //fim de statement
-  {"Expected ';' after value.",
+  // parser — fim de statement
+  {"Esperado ';' após valor.",
    "Every statement must end with ';' — discipline is the foundation of order."},
-  {"Expected ';' after expression.",
+  {"Esperado ';' após expressão.",
    "Every statement must end with ';' — discipline is the foundation of order."},
 
-  //parênteses e blocos
+  // parser — parênteses e blocos
   {"Expected ')' after expression.",
    "An open '(' was never closed. Every opening demands a closing."},
   {"Expected ')' after typeOf operand.",
@@ -30,50 +30,59 @@ static const std::unordered_map<std::string, std::string> explanations = {
   {"Expected '}' after block.",
    "A block opened with '{' was never closed with '}'. Every revolution needs an end."},
 
-  // expressões e variáveis
+  // parser — expressões e variáveis
   {"Expected expression.",
    "An expression was expected here but was not found. The compiler cannot proceed without substance."},
-  {"Expected variable name.",
+  {"Esperado nome da variável.",
    "A variable name was expected. Identity is required before assignment."},
-  {"Expected '=' after variable name.",
+  {"Esperado '=' após nome da variável.",
    "After the variable name, '=' is required to assign a value."},
   {"invalida assignment target",
    "The left side of '=' must be a variable. You cannot assign to an expression."},
 
-  // runtime = aritmética
-  {"Division by zero.",
+  // runtime — aritmética
+  {"Divisão por zero.",
    "Production cannot be divided among zero workers."},
-  {"Operand must be a number.",
+  {"Operand deve ser um número.",
    "This operation requires a number. Check the type with typeOf()."},
-  {"Operands must be numbers.",
+  {"Operands devem ser números.",
    "Both sides of this operation must be numbers. Check types with typeOf()."},
-  {"Overflow: The sum of integers exceeds the limit.",
+  {"Overflow: soma de inteiros excede o limite.",
    "The sum exceeds the maximum integer. Consider using smaller values."},
-  {"Overflow: float result is infinite.",
+  {"Overflow: resultado float é infinito.",
    "The float result is infinite — the means of production have been exhausted."},
 };
 
-//nome de variável embutido)
+// Mensagens com prefixo dinâmico (nome de variável embutido)
 static const std::unordered_map<std::string, std::string> prefixExplanations = {
-  {"Unreferenced variable:",
+  {"Variável não referenciada:",
    "This variable was never declared. Use 'name = value;' before referencing it."},
-  {"Variable not defined:",
+  {"Variável não definida:",
    "Cannot assign to a variable that was never declared. Declare it first."},
+  {"Unreferenced binding:",
+   "This binding was never declared. Use 'name = value;' before referencing it."},
+  {"Undefined binding:",
+   "This binding was never declared. Declare it before assigning."},
+  {"The binding",
+   "Each name belongs to one value, forever — immutable binding. Declare a new name instead."},
 };
 
 static std::string explain(const std::string& message){
+
   auto it = explanations.find(message);
   if(it != explanations.end())
-    return "\n  → " + it->second;
+    return "\n  -> " + it->second;
 
 
   for(const auto& [prefix, explanation] : prefixExplanations){
     if(message.rfind(prefix, 0) == 0)
-      return "\n  → " + explanation;
+      return "\n  -> " + explanation;
   }
 
   return "";
 }
+
+
 
 void Debug::report(int line, const std::string& where, const std::string& message){
   hardError = true;
@@ -96,7 +105,7 @@ void Debug::error(Token token, const std::string& message){
   }
 }
 
-void Debug::runtimeError(const RuntimeError& error){
+void Debug::runtimeError(RuntimeError error){
   std::cerr << "\n[FATAL ERROR on the line " << error.token.line << "] "
             << "Contradiction during execution:\n"
             << "  ✖ " << error.what()

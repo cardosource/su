@@ -6,8 +6,9 @@
 #include "visitor.hpp"
 #include "bignum.hpp"
 #include <any>
+#include <sstream>
+#include <iomanip>
 #include <cmath>
-#include <exception>
 #include <memory>
 #include <string>
 #include <iostream>
@@ -29,7 +30,6 @@ static BigFloat toBigFloat(const std::any& v){
 
 static BigInt one(){ return BigInt(1LL); }
 
- 
 std::any Interpreter::applyArith(const Token& oper, std::any left, std::any right){
     checkNumberOperands(oper, left, right);
     bool bothInt = isBigInt(left) && isBigInt(right);
@@ -49,27 +49,30 @@ std::any Interpreter::applyArith(const Token& oper, std::any left, std::any righ
         case TokenType::SLASH:
         case TokenType::SLASH_EQUAL:{
             if(isBigInt(right) && std::any_cast<BigInt>(right).isZero())
-                throw RuntimeError{oper, "Divisão por zero."};
+                throw RuntimeError{oper, "Division by zero."};
             if(isBigFloat(right) && toBigFloat(right).mantissa.isZero())
-                throw RuntimeError{oper, "Divisão por zero."};
+                throw RuntimeError{oper, "Division by zero."};
             if(bothInt){
-                auto [q, rem] = BigInt::divmod(std::any_cast<BigInt>(left), std::any_cast<BigInt>(right));
+                auto [q, rem] = BigInt::divmod(
+                    std::any_cast<BigInt>(left), std::any_cast<BigInt>(right));
                 if(rem.isZero()) return q;
                 return toBigFloat(left) / toBigFloat(right);
             }
             return toBigFloat(left) / toBigFloat(right);
         }
         default:
-            throw RuntimeError{oper, "Operador aritmético desconhecido."};
+            throw RuntimeError{oper, "Unknown arithmetic operator."};
     }
 }
 
-std::any Interpreter::visitLiteralExpr(std::shared_ptr<Literal> expr){ return expr->value; }
+std::any Interpreter::visitLiteralExpr(std::shared_ptr<Literal> expr){
+    return expr->value;
+}
 
 std::any Interpreter::visitUnaryExpr(std::shared_ptr<Unary> expr){
     std::any right = evaluate(expr->right);
     switch(expr->oper.type){
-        case TokenType::BANG:   return !isTruthy(right);
+        case TokenType::BANG: return !isTruthy(right);
         case TokenType::MINUS:
             checkNumberOperand(expr->oper, right);
             if(isBigInt(right))   return -std::any_cast<BigInt>(right);
@@ -79,7 +82,6 @@ std::any Interpreter::visitUnaryExpr(std::shared_ptr<Unary> expr){
     }
 }
 
- 
 std::any Interpreter::visitPreIncDec(std::shared_ptr<PreIncDec> expr){
     std::any val = curr_env->get(expr->name);
     checkNumberOperand(expr->oper, val);
@@ -94,7 +96,6 @@ std::any Interpreter::visitPreIncDec(std::shared_ptr<PreIncDec> expr){
     return newVal;
 }
 
- 
 std::any Interpreter::visitPostIncDec(std::shared_ptr<PostIncDec> expr){
     std::any val = curr_env->get(expr->name);
     checkNumberOperand(expr->oper, val);
@@ -106,10 +107,9 @@ std::any Interpreter::visitPostIncDec(std::shared_ptr<PostIncDec> expr){
         newVal = isBigInt(val) ? std::any(std::any_cast<BigInt>(val) - one())
                                : std::any(toBigFloat(val) - BigFloat(one()));
     curr_env->assign(expr->name, newVal);
-    return val; // retorna valor ANTES do incremento
+    return val;
 }
 
- 
 std::any Interpreter::visitCompoundAssign(std::shared_ptr<CompoundAssign> expr){
     std::any current = curr_env->get(expr->name);
     std::any right   = evaluate(expr->value);
@@ -117,6 +117,15 @@ std::any Interpreter::visitCompoundAssign(std::shared_ptr<CompoundAssign> expr){
     curr_env->assign(expr->name, result);
     return result;
 }
+
+std::any Interpreter::visitIdOfExpr(std::shared_ptr<IdOf> expr){
+    auto ptr = curr_env->getPtr(expr->name);
+    std::ostringstream oss;
+    oss << "0x" << std::hex << std::uppercase
+        << reinterpret_cast<uintptr_t>(ptr.get());
+    return oss.str();
+}
+
 
 bool Interpreter::isTruthy(const std::any& object){
     if(object.type() == typeid(nullptr)) return false;
@@ -126,12 +135,13 @@ bool Interpreter::isTruthy(const std::any& object){
 
 void Interpreter::checkNumberOperand(const Token& oper, const std::any& operand){
     if(isNum(operand)) return;
-    throw RuntimeError{oper, "Operand deve ser um número."};
+    throw RuntimeError{oper, "Operand must be a number."};
 }
 
-void Interpreter::checkNumberOperands(const Token& oper, const std::any& left, const std::any& right){
+void Interpreter::checkNumberOperands(const Token& oper, const std::any& left,
+                                       const std::any& right){
     if(isNum(left) && isNum(right)) return;
-    throw RuntimeError{oper, "Operands devem ser números."};
+    throw RuntimeError{oper, "Operands must be numbers."};
 }
 
 bool Interpreter::isEqual(const std::any& a, const std::any& b){
@@ -151,11 +161,16 @@ std::string Interpreter::stringify(const std::any& object){
     if(object.type() == typeid(std::string)) return std::any_cast<std::string>(object);
     if(isBigInt(object))                     return std::any_cast<BigInt>(object).toString();
     if(isBigFloat(object))                   return std::any_cast<BigFloat>(object).toString();
-    return "stringify: tipo não reconhecido";
+    return "stringify: unrecognized type";
 }
 
-std::any Interpreter::visitGroupingExpr(std::shared_ptr<Grouping> expr){ return evaluate(expr->expression); }
-std::any Interpreter::evaluate(std::shared_ptr<Expr> expr){ return expr->accept(*this); }
+std::any Interpreter::visitGroupingExpr(std::shared_ptr<Grouping> expr){
+    return evaluate(expr->expression);
+}
+
+std::any Interpreter::evaluate(std::shared_ptr<Expr> expr){
+    return expr->accept(*this);
+}
 
 std::any Interpreter::visitBinaryExpr(std::shared_ptr<Binary> expr){
     std::any left  = evaluate(expr->left);
@@ -194,10 +209,13 @@ void Interpreter::interpret(std::vector<std::shared_ptr<Statement::Stmt>> &state
     }
 }
 
-void Interpreter::execute(std::shared_ptr<Statement::Stmt> statement){ statement->accept(*this); }
+void Interpreter::execute(std::shared_ptr<Statement::Stmt> statement){
+    statement->accept(*this);
+}
 
 std::any Interpreter::visitExpressionStmt(std::shared_ptr<Statement::Expression> stmt){
-    evaluate(stmt->expression); return {};
+    evaluate(stmt->expression);
+    return {};
 }
 
 std::any Interpreter::visitProclaimStmt(std::shared_ptr<Statement::Proclaim> stmt){
@@ -205,19 +223,29 @@ std::any Interpreter::visitProclaimStmt(std::shared_ptr<Statement::Proclaim> stm
     return {};
 }
 
-std::any Interpreter::visitVariable(std::shared_ptr<Variable> expr){ return curr_env->get(expr->name); }
-
-std::any Interpreter::visitVarStmt(std::shared_ptr<Statement::Var> stmt){
-    std::any value = nullptr;
-    if(stmt->init != nullptr) value = evaluate(stmt->init);
-    curr_env->define(stmt->name.lexeme, std::move(value));
-    return {};
+std::any Interpreter::visitVariable(std::shared_ptr<Variable> expr){
+    return curr_env->get(expr->name);
 }
 
 std::any Interpreter::visitAssignStmt(std::shared_ptr<Statement::Assign> stmt){
+    /* verifica se o lado direito é uma variável  se for, compartilha o ptr
+     graph sharing: y = x ... y e x apontam para o mesmo objeto
+     Tenta obter o ptr da variável do lado direito
+     (só funciona se o valor for uma Variable direta) */
     std::any value = evaluate(stmt->value);
-    try { curr_env->assign(stmt->name, value); }
-    catch(const RuntimeError&){ curr_env->define(stmt->name.lexeme, std::move(value)); }
+
+    /* graph sharing: se o rhs era uma Variable, compartilha o ptr
+     O evaluate já retornou o valor; para graph sharing real,
+     verificamos se o stmt->value é um Variable node*/
+    if(auto* varNode = dynamic_cast<Variable*>(stmt->value.get())){
+        auto ptr = curr_env->getPtrByName(varNode->name.lexeme);
+        if(ptr) {
+            curr_env->defineShared(stmt->name.lexeme, ptr, stmt->name.line);
+            return {};
+        }
+    }
+
+    curr_env->define(stmt->name.lexeme, std::move(value), stmt->name.line);
     return {};
 }
 
@@ -225,6 +253,13 @@ std::any Interpreter::visitAssignExpr(std::shared_ptr<Assign> expr){
     std::any value = evaluate(expr->value);
     curr_env->assign(expr->name, value);
     return value;
+}
+
+std::any Interpreter::visitVarStmt(std::shared_ptr<Statement::Var> stmt){
+    std::any value = nullptr;
+    if(stmt->init != nullptr) value = evaluate(stmt->init);
+    curr_env->define(stmt->name.lexeme, std::move(value), stmt->name.line);
+    return {};
 }
 
 void Interpreter::executeBlock(const std::vector<std::shared_ptr<Statement::Stmt>> &statements,
@@ -248,11 +283,6 @@ std::any Interpreter::visitIfStmt(std::shared_ptr<Statement::If> stmt){
     return {};
 }
 
-std::any Interpreter::visitWhileStmt(std::shared_ptr<Statement::While> stmt){
-    while(isTruthy(evaluate(stmt->condition))) execute(stmt->body);
-    return {};
-}
-
 std::any Interpreter::visitLogicalExpr(std::shared_ptr<Logical> expr){
     std::any left = evaluate(expr->left);
     if(expr->oper.type == TokenType::OR){ if(isTruthy(left)) return left; }
@@ -270,11 +300,9 @@ std::any Interpreter::visitTypeOfExpr(std::shared_ptr<TypeOf> expr){
     return std::string("unknown");
 }
 
- 
 std::any Interpreter::visitStringInterp(std::shared_ptr<StringInterp> expr){
     std::string result;
-    for(auto& part : expr->parts){
+    for(auto& part : expr->parts)
         result += stringify(evaluate(part));
-    }
     return result;
 }
