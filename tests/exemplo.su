@@ -6,7 +6,9 @@ ativo   = true;
 inativo = false;
 nada    = nil;
 proclaim(id(nome));
+
 nome="aa";
+
 proclaim(id(nome));
 proclaim("1. TIPOS");
 proclaim(nome);
