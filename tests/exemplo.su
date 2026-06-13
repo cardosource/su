@@ -1,5 +1,4 @@
 
-
 nome    = "Karl";
 idade   = 42;
 altura  = 1.75;
@@ -223,3 +222,4 @@ proclaim(false or 42);
 proclaim("existe" or "outro");
 proclaim(true and "fim");
 proclaim(false and "nunca");
+
