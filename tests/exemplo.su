@@ -1,27 +1,3 @@
-a=1;
-b=0;
-c=0;
-for(x to 10){
-    proclaim("valor - [#x]");
-}
-
-
-for(b = 5 to 10){
-    proclaim("#b");
-}
-
-for(0 to 5){
-    proclaim("contando");
-}
-
-for(c to 10, 2){
-    proclaim("#c");   // 0, 2, 4, 6, 8, 10
-}
-
-
-for(i = 0; i < 10; i++){
-    proclaim("#i");
-}
 
 
 nome    = "Karl";
@@ -30,7 +6,9 @@ altura  = 1.75;
 ativo   = true;
 inativo = false;
 nada    = nil;
-
+proclaim(id(nome));
+nome="aa";
+proclaim(id(nome));
 proclaim("1. TIPOS");
 proclaim(nome);
 proclaim(idade);
@@ -228,23 +206,8 @@ n--;
 proclaim("n após n--: #n");
 
 
-proclaim("15. WHILE");
-i = 0;
-while(i < 5){
-    proclaim("while i = #i");
-    i += 1;
-}
 
 
-proclaim("16. FOR crescente");
-for(j = 0; j < 5; j++){
-    proclaim("for j = #j");
-}
-
-proclaim("16. FOR decrescente");
-for(k = 5; k > 0; k--){
-    proclaim("for k = #k");
-}
 
 
 proclaim("17. EXPRESSÕES ANINHADAS");
