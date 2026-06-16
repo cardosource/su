@@ -1,308 +1,427 @@
 #include "interpreter.hpp"
 #include "debug.hpp"
 #include "runtimeError.hpp"
-#include "stmt.hpp"
-#include "token.hpp"
-#include "visitor.hpp"
 #include "bignum.hpp"
-#include <any>
+#include <cstring>
+#include <cstdio>
 #include <sstream>
-#include <iomanip>
-#include <cmath>
-#include <memory>
-#include <string>
 #include <iostream>
-#include <vector>
+#include <memory>
+#include <functional>
 
-Interpreter::Interpreter() {
-    global = std::make_shared<Env>();
+Interpreter* Interpreter::instance = nullptr;
+Interpreter* g_interpreter = nullptr;
+
+
+Interpreter::Interpreter(){
+    global   = new Env();
     curr_env = global;
+    instance = this;
+    g_interpreter = this;
 }
 
-static bool isBigInt  (const std::any& v){ return v.type() == typeid(BigInt);   }
-static bool isBigFloat(const std::any& v){ return v.type() == typeid(BigFloat); }
-static bool isNum     (const std::any& v){ return isBigInt(v) || isBigFloat(v); }
-
-static BigFloat toBigFloat(const std::any& v){
-    if(isBigInt(v)) return BigFloat(std::any_cast<BigInt>(v));
-    return std::any_cast<BigFloat>(v);
+Interpreter::~Interpreter(){
+    delete global;
 }
 
-static BigInt one(){ return BigInt(1LL); }
+uint64_t Interpreter::getInlineId(const SuValue& v) const {
+    uint64_t key = 0;
+    if (v.isInt()) {
+        key = (1ULL << 60) | (static_cast<uint64_t>(v.asInt()) & 0x0FFFFFFFFFFFFFFFULL);
+    } 
+    else if (v.isBool()) {
+        key = (2ULL << 60) | (v.asBool() ? 1 : 0);
+    }
+    else if (v.isNil()) {
+        key = (3ULL << 60);
+    }
+    else {
+        key = nextInlineId_;
+    }
+    
+    auto it = inlineIds_.find(key);
+    if (it != inlineIds_.end()) {
+        return it->second;
+    }
+    
+    uint64_t id = nextInlineId_++;
+    uint64_t fakeAddr = 0x7F0000000000ULL | id;
+    inlineIds_[key] = fakeAddr;
+    return fakeAddr;
+}
 
-std::any Interpreter::applyArith(const Token& oper, std::any left, std::any right){
-    checkNumberOperands(oper, left, right);
-    bool bothInt = isBigInt(left) && isBigInt(right);
-    switch(oper.type){
-        case TokenType::PLUS:
-        case TokenType::PLUS_EQUAL:
-            if(bothInt) return std::any_cast<BigInt>(left) + std::any_cast<BigInt>(right);
-            return toBigFloat(left) + toBigFloat(right);
-        case TokenType::MINUS:
-        case TokenType::MINUS_EQUAL:
-            if(bothInt) return std::any_cast<BigInt>(left) - std::any_cast<BigInt>(right);
-            return toBigFloat(left) - toBigFloat(right);
-        case TokenType::STAR:
-        case TokenType::STAR_EQUAL:
-            if(bothInt) return std::any_cast<BigInt>(left) * std::any_cast<BigInt>(right);
-            return toBigFloat(left) * toBigFloat(right);
-        case TokenType::SLASH:
-        case TokenType::SLASH_EQUAL:{
-            if(isBigInt(right) && std::any_cast<BigInt>(right).isZero())
-                throw RuntimeError{oper, "Division by zero."};
-            if(isBigFloat(right) && toBigFloat(right).mantissa.isZero())
-                throw RuntimeError{oper, "Division by zero."};
-            if(bothInt){
-                auto [q, rem] = BigInt::divmod(
-                    std::any_cast<BigInt>(left), std::any_cast<BigInt>(right));
-                if(rem.isZero()) return q;
-                return toBigFloat(left) / toBigFloat(right);
-            }
-            return toBigFloat(left) / toBigFloat(right);
+static bool isNumVal(const SuValue& v){
+    return v.isInt() ||
+           (v.isObj() && (v.obj->type == ObjType::BIGINT ||
+                          v.obj->type == ObjType::BIGFLOAT));
+}
+
+static double toDouble(const SuValue& v){
+    if(v.isInt()) return static_cast<double>(v.asInt());
+    if(v.isObj() && v.obj->type == ObjType::BIGFLOAT)
+        return reinterpret_cast<SuBigFloat*>(v.obj)->value;
+    if(v.isObj() && v.obj->type == ObjType::BIGINT){
+        auto* bi = reinterpret_cast<SuBigInt*>(v.obj);
+        try { return std::stod(bi->value.toString()); } catch(...){ return 0.0; }
+    }
+    return 0.0;
+}
+
+static SuValue makeBigInt(const BigInt& val){
+    void* mem = gcAlloc(sizeof(SuBigInt));
+    if(!mem) return SuValue::nil();
+    SuBigInt* obj = new(mem) SuBigInt(val);
+    obj->type = ObjType::BIGINT;
+    return SuValue::make_obj(obj);
+}
+
+static SuValue makeBigInt(BigInt&& val){
+    void* mem = gcAlloc(sizeof(SuBigInt));
+    if(!mem) return SuValue::nil();
+    SuBigInt* obj = new(mem) SuBigInt(std::move(val));
+    obj->type = ObjType::BIGINT;
+    return SuValue::make_obj(obj);
+}
+
+
+const char* Interpreter::typeStr(const SuValue& v){
+    if(v.isNil())  return "nil";
+    if(v.isBool()) return "bool";
+    if(v.isInt())  return "int";
+    if(v.isObj()){
+        switch(v.obj->type){
+            case ObjType::BIGINT:   return "int";
+            case ObjType::BIGFLOAT: return "float";
+            case ObjType::STRING:   return "str";
+            default: break;
         }
-        default:
-            throw RuntimeError{oper, "Unknown arithmetic operator."};
     }
+    return "unknown";
 }
 
-std::any Interpreter::visitLiteralExpr(std::shared_ptr<Literal> expr){
-    return expr->value;
+
+std::string Interpreter::stringify(const SuValue& v){
+    if(v.isNil())  return "nil";
+    if(v.isBool()) return v.asBool() ? "true" : "false";
+    if(v.isInt())  return std::to_string(v.asInt());
+    if(v.isObj()){
+        switch(v.obj->type){
+            case ObjType::STRING:
+                return std::string(v.asString()->data, v.asString()->len);
+            case ObjType::BIGINT:
+                return reinterpret_cast<SuBigInt*>(v.obj)->value.toString();
+            case ObjType::BIGFLOAT:{
+                double d = reinterpret_cast<SuBigFloat*>(v.obj)->value;
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%g", d);
+                return buf;
+            }
+            default: break;
+        }
+    }
+    return "unknown";
 }
 
-std::any Interpreter::visitUnaryExpr(std::shared_ptr<Unary> expr){
-    std::any right = evaluate(expr->right);
-    switch(expr->oper.type){
-        case TokenType::BANG: return !isTruthy(right);
+
+void Interpreter::checkNumber(const Token& op, const SuValue& v){
+    if(!isNumVal(v)) throw RuntimeError(op, "Operand must be a number.");
+}
+
+void Interpreter::checkNumbers(const Token& op, const SuValue& a, const SuValue& b){
+    if(!isNumVal(a) || !isNumVal(b))
+        throw RuntimeError(op, "Operands must be numbers.");
+}
+
+SuValue Interpreter::applyArith(const Token& op, SuValue a, SuValue b){
+    checkNumbers(op, a, b);
+
+    if(a.isInt() && b.isInt()){
+        int64_t ai = a.asInt(), bi = b.asInt();
+        switch(op.type){
+            case TokenType::PLUS:
+            case TokenType::PLUS_EQUAL:  return SuValue::make_int(ai + bi);
+            case TokenType::MINUS:
+            case TokenType::MINUS_EQUAL: return SuValue::make_int(ai - bi);
+            case TokenType::STAR:
+            case TokenType::STAR_EQUAL:  return SuValue::make_int(ai * bi);
+            case TokenType::SLASH:
+            case TokenType::SLASH_EQUAL:
+                if(bi == 0) throw RuntimeError(op, "Division by zero.");
+                if(ai % bi == 0) return SuValue::make_int(ai / bi);
+                return SuValue::make_obj(SuBigFloat::create(
+                    static_cast<double>(ai) / static_cast<double>(bi)));
+            default: break;
+        }
+    }
+
+    bool aBI = a.isObj() && a.obj->type == ObjType::BIGINT;
+    bool bBI = b.isObj() && b.obj->type == ObjType::BIGINT;
+    if((aBI || a.isInt()) && (bBI || b.isInt())){
+        BigInt ai = a.isInt() ? BigInt((long long)a.asInt())
+                              : reinterpret_cast<SuBigInt*>(a.obj)->value;
+        BigInt bi = b.isInt() ? BigInt((long long)b.asInt())
+                              : reinterpret_cast<SuBigInt*>(b.obj)->value;
+        switch(op.type){
+            case TokenType::PLUS:
+            case TokenType::PLUS_EQUAL:  return makeBigInt(ai + bi);
+            case TokenType::MINUS:
+            case TokenType::MINUS_EQUAL: return makeBigInt(ai - bi);
+            case TokenType::STAR:
+            case TokenType::STAR_EQUAL:  return makeBigInt(ai * bi);
+            case TokenType::SLASH:
+            case TokenType::SLASH_EQUAL:{
+                if(bi.isZero()) throw RuntimeError(op, "Division by zero.");
+                auto [q, rem] = BigInt::divmod(ai, bi);
+                if(rem.isZero()) return makeBigInt(q);
+                return SuValue::make_obj(SuBigFloat::create(
+                    toDouble(a) / toDouble(b)));
+            }
+            default: break;
+        }
+    }
+
+    double af = toDouble(a), bf = toDouble(b);
+    switch(op.type){
+        case TokenType::PLUS:
+        case TokenType::PLUS_EQUAL:  return SuValue::make_obj(SuBigFloat::create(af + bf));
         case TokenType::MINUS:
-            checkNumberOperand(expr->oper, right);
-            if(isBigInt(right))   return -std::any_cast<BigInt>(right);
-            if(isBigFloat(right)) return -std::any_cast<BigFloat>(right);
-            return {};
-        default: return {};
+        case TokenType::MINUS_EQUAL: return SuValue::make_obj(SuBigFloat::create(af - bf));
+        case TokenType::STAR:
+        case TokenType::STAR_EQUAL:  return SuValue::make_obj(SuBigFloat::create(af * bf));
+        case TokenType::SLASH:
+        case TokenType::SLASH_EQUAL:
+            if(bf == 0.0) throw RuntimeError(op, "Division by zero.");
+            return SuValue::make_obj(SuBigFloat::create(af / bf));
+        default: break;
     }
+    throw RuntimeError(op, "Unknown arithmetic operator.");
 }
 
-std::any Interpreter::visitPreIncDec(std::shared_ptr<PreIncDec> expr){
-    std::any val = curr_env->get(expr->name);
-    checkNumberOperand(expr->oper, val);
-    std::any newVal;
-    if(expr->oper.type == TokenType::PLUS_PLUS)
-        newVal = isBigInt(val) ? std::any(std::any_cast<BigInt>(val) + one())
-                               : std::any(toBigFloat(val) + BigFloat(one()));
-    else
-        newVal = isBigInt(val) ? std::any(std::any_cast<BigInt>(val) - one())
-                               : std::any(toBigFloat(val) - BigFloat(one()));
-    curr_env->assign(expr->name, newVal);
-    return newVal;
-}
+SuValue Interpreter::evaluate(Expr* expr){ return expr->accept(*this); }
 
-std::any Interpreter::visitPostIncDec(std::shared_ptr<PostIncDec> expr){
-    std::any val = curr_env->get(expr->name);
-    checkNumberOperand(expr->oper, val);
-    std::any newVal;
-    if(expr->oper.type == TokenType::PLUS_PLUS)
-        newVal = isBigInt(val) ? std::any(std::any_cast<BigInt>(val) + one())
-                               : std::any(toBigFloat(val) + BigFloat(one()));
-    else
-        newVal = isBigInt(val) ? std::any(std::any_cast<BigInt>(val) - one())
-                               : std::any(toBigFloat(val) - BigFloat(one()));
-    curr_env->assign(expr->name, newVal);
-    return val;
-}
-
-std::any Interpreter::visitCompoundAssign(std::shared_ptr<CompoundAssign> expr){
-    std::any current = curr_env->get(expr->name);
-    std::any right   = evaluate(expr->value);
-    std::any result  = applyArith(expr->oper, current, right);
-    curr_env->assign(expr->name, result);
-    return result;
-}
-
-std::any Interpreter::visitIdOfExpr(std::shared_ptr<IdOf> expr){
-    auto ptr = curr_env->getPtr(expr->name);
-    std::ostringstream oss;
-    oss << "0x" << std::hex << std::uppercase
-        << reinterpret_cast<uintptr_t>(ptr.get());
-    return oss.str();
-}
-
-
-bool Interpreter::isTruthy(const std::any& object){
-    if(object.type() == typeid(nullptr)) return false;
-    if(object.type() == typeid(bool)) return std::any_cast<bool>(object);
+bool Interpreter::isTruthy(const SuValue& v){
+    if(v.isNil())  return false;
+    if(v.isBool()) return v.asBool();
     return true;
 }
 
-void Interpreter::checkNumberOperand(const Token& oper, const std::any& operand){
-    if(isNum(operand)) return;
-    throw RuntimeError{oper, "Operand must be a number."};
-}
-
-void Interpreter::checkNumberOperands(const Token& oper, const std::any& left,
-                                       const std::any& right){
-    if(isNum(left) && isNum(right)) return;
-    throw RuntimeError{oper, "Operands must be numbers."};
-}
-
-bool Interpreter::isEqual(const std::any& a, const std::any& b){
-    if(a.type() == typeid(nullptr) && b.type() == typeid(nullptr)) return true;
-    if(a.type() == typeid(nullptr) || b.type() == typeid(nullptr)) return false;
-    if(isNum(a) && isNum(b)) return toBigFloat(a) == toBigFloat(b);
-    if(a.type() == typeid(std::string) && b.type() == typeid(std::string))
-        return std::any_cast<std::string>(a) == std::any_cast<std::string>(b);
-    if(a.type() == typeid(bool) && b.type() == typeid(bool))
-        return std::any_cast<bool>(a) == std::any_cast<bool>(b);
+bool Interpreter::isEqual(const SuValue& a, const SuValue& b){
+    if(a.isNil() && b.isNil()) return true;
+    if(a.isNil() || b.isNil()) return false;
+    if(a.isBool() && b.isBool()) return a.asBool() == b.asBool();
+    if(isNumVal(a) && isNumVal(b)) return toDouble(a) == toDouble(b);
+    if(a.isString() && b.isString())
+        return strcmp(a.asString()->c_str(), b.asString()->c_str()) == 0;
     return false;
 }
 
-std::string Interpreter::stringify(const std::any& object){
-    if(object.type() == typeid(nullptr))     return "nil";
-    if(object.type() == typeid(bool))        return std::any_cast<bool>(object) ? "true" : "false";
-    if(object.type() == typeid(std::string)) return std::any_cast<std::string>(object);
-    if(isBigInt(object))                     return std::any_cast<BigInt>(object).toString();
-    if(isBigFloat(object))                   return std::any_cast<BigFloat>(object).toString();
-    return "stringify: unrecognized type";
+
+SuValue Interpreter::visitLiteralExpr(Literal* expr){ return expr->value; }
+
+SuValue Interpreter::visitGroupingExpr(Grouping* expr){
+    return evaluate(expr->expression.get());
 }
 
-std::any Interpreter::visitGroupingExpr(std::shared_ptr<Grouping> expr){
-    return evaluate(expr->expression);
+
+SuValue Interpreter::visitUnaryExpr(Unary* expr){
+    SuValue right = evaluate(expr->right.get());
+    switch(expr->oper.type){
+        case TokenType::BANG:
+            return SuValue::make_bool(!isTruthy(right));
+        case TokenType::MINUS:
+            checkNumber(expr->oper, right);
+            if(right.isInt()) return SuValue::make_int(-right.asInt());
+            if(right.isObj() && right.obj->type == ObjType::BIGINT){
+                BigInt neg = -reinterpret_cast<SuBigInt*>(right.obj)->value;
+                return makeBigInt(std::move(neg));
+            }
+            if(right.isObj() && right.obj->type == ObjType::BIGFLOAT)
+                return SuValue::make_obj(SuBigFloat::create(
+                    -reinterpret_cast<SuBigFloat*>(right.obj)->value));
+            break;
+        default: break;
+    }
+    return SuValue::nil();
 }
 
-std::any Interpreter::evaluate(std::shared_ptr<Expr> expr){
-    return expr->accept(*this);
-}
 
-std::any Interpreter::visitBinaryExpr(std::shared_ptr<Binary> expr){
-    std::any left  = evaluate(expr->left);
-    std::any right = evaluate(expr->right);
+SuValue Interpreter::visitBinaryExpr(Binary* expr){
+    SuValue left  = evaluate(expr->left.get());
+    SuValue right = evaluate(expr->right.get());
     switch(expr->oper.type){
         case TokenType::PLUS:
-            if(left.type() == typeid(std::string) || right.type() == typeid(std::string))
-                return stringify(left) + stringify(right);
+            if(left.isString() || right.isString()){
+                std::string s = stringify(left) + stringify(right);
+                return SuValue::make_obj(SuString::create(s.c_str()));
+            }
             return applyArith(expr->oper, left, right);
         case TokenType::MINUS:
         case TokenType::STAR:
         case TokenType::SLASH:
             return applyArith(expr->oper, left, right);
         case TokenType::GREATER:
-            checkNumberOperands(expr->oper, left, right);
-            return toBigFloat(left) > toBigFloat(right);
+            checkNumbers(expr->oper, left, right);
+            return SuValue::make_bool(toDouble(left) > toDouble(right));
         case TokenType::GREATER_EQUAL:
-            checkNumberOperands(expr->oper, left, right);
-            return toBigFloat(left) >= toBigFloat(right);
+            checkNumbers(expr->oper, left, right);
+            return SuValue::make_bool(toDouble(left) >= toDouble(right));
         case TokenType::LESS:
-            checkNumberOperands(expr->oper, left, right);
-            return toBigFloat(left) < toBigFloat(right);
+            checkNumbers(expr->oper, left, right);
+            return SuValue::make_bool(toDouble(left) < toDouble(right));
         case TokenType::LESS_EQUAL:
-            checkNumberOperands(expr->oper, left, right);
-            return toBigFloat(left) <= toBigFloat(right);
-        case TokenType::BANG_EQUAL:  return !isEqual(left, right);
-        case TokenType::EQUAL_EQUAL: return isEqual(left, right);
-        default: return {};
+            checkNumbers(expr->oper, left, right);
+            return SuValue::make_bool(toDouble(left) <= toDouble(right));
+        case TokenType::BANG_EQUAL:
+            return SuValue::make_bool(!isEqual(left, right));
+        case TokenType::EQUAL_EQUAL:
+            return SuValue::make_bool(isEqual(left, right));
+        default:
+            return SuValue::nil();
     }
 }
 
-void Interpreter::interpret(std::vector<std::shared_ptr<Statement::Stmt>> &statements){
-    for(auto& statement : statements){
-        try{ execute(statement); }
+
+SuValue Interpreter::visitLogicalExpr(Logical* expr){
+    SuValue left = evaluate(expr->left.get());
+    if(expr->oper.type == TokenType::OR){ if(isTruthy(left)) return left; }
+    else                                { if(!isTruthy(left)) return left; }
+    return evaluate(expr->right.get());
+}
+
+
+SuValue Interpreter::visitVariable(Variable* expr){
+    return curr_env->get(expr->name);
+}
+
+
+SuValue Interpreter::visitAssignExpr(Assign* expr){
+    SuValue val = evaluate(expr->value.get());
+    curr_env->assign(expr->name, val);
+    return val;
+}
+
+SuValue Interpreter::visitTypeOfExpr(TypeOf* expr){
+    SuValue v = evaluate(expr->operand.get());
+    return SuValue::make_obj(SuString::create(typeStr(v)));
+}
+
+SuValue Interpreter::visitIdOfExpr(IdOf* expr){
+    SuValue v = curr_env->get(expr->name);
+    char buf[32];
+    
+    if (v.isObj() && v.obj != nullptr) {
+        snprintf(buf, sizeof(buf), "0x%llX", (unsigned long long)v.obj);
+    } 
+    else {
+        uint64_t id = getInlineId(v);
+        snprintf(buf, sizeof(buf), "0x%llX", (unsigned long long)id);
+    }
+    
+    return SuValue::make_obj(SuString::create(buf));
+}
+
+SuValue Interpreter::visitCompoundAssign(CompoundAssign* expr){
+    SuValue cur = curr_env->get(expr->name);
+    SuValue rhs = evaluate(expr->value.get());
+    SuValue res = applyArith(expr->oper, cur, rhs);
+    curr_env->assign(expr->name, res);
+    return res;
+}
+
+SuValue Interpreter::visitPreIncDec(PreIncDec* expr){
+    SuValue val = curr_env->get(expr->name);
+    checkNumber(expr->oper, val);
+    SuValue newVal;
+    if(val.isInt()){
+        int64_t d = expr->oper.type == TokenType::PLUS_PLUS ? 1 : -1;
+        newVal = SuValue::make_int(val.asInt() + d);
+    } else {
+        Token op{expr->oper.type == TokenType::PLUS_PLUS
+                 ? TokenType::PLUS : TokenType::MINUS, "", {}, expr->oper.line};
+        newVal = applyArith(op, val, SuValue::make_int(1));
+    }
+    curr_env->assign(expr->name, newVal);
+    return newVal;
+}
+
+SuValue Interpreter::visitPostIncDec(PostIncDec* expr){
+    SuValue val = curr_env->get(expr->name);
+    checkNumber(expr->oper, val);
+    SuValue newVal;
+    if(val.isInt()){
+        int64_t d = expr->oper.type == TokenType::PLUS_PLUS ? 1 : -1;
+        newVal = SuValue::make_int(val.asInt() + d);
+    } else {
+        Token op{expr->oper.type == TokenType::PLUS_PLUS
+                 ? TokenType::PLUS : TokenType::MINUS, "", {}, expr->oper.line};
+        newVal = applyArith(op, val, SuValue::make_int(1));
+    }
+    curr_env->assign(expr->name, newVal);
+    return val;
+}
+
+SuValue Interpreter::visitStringInterp(StringInterp* expr){
+    std::string result;
+    for(auto& part : expr->parts)
+        result += stringify(evaluate(part.get()));
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+void Interpreter::visitExpressionStmt(Statement::Expression* stmt){
+    evaluate(stmt->expression.get());
+}
+
+void Interpreter::visitProclaimStmt(Statement::Proclaim* stmt){
+    std::cout << stringify(evaluate(stmt->expression.get())) << '\n';
+}
+
+void Interpreter::visitAssignStmt(Statement::Assign* stmt){
+    SuValue val = evaluate(stmt->value.get());
+    curr_env->define(stmt->name.lexeme, val, stmt->name.line, false);
+}
+
+void Interpreter::visitVarStmt(Statement::Var* stmt){
+    SuValue val = SuValue::nil();
+    if(stmt->init) val = evaluate(stmt->init.get());
+    curr_env->define(stmt->name.lexeme, val, stmt->name.line, false);
+}
+
+void Interpreter::executeBlock(std::vector<std::shared_ptr<Statement::Stmt>>& stmts,
+                               Env* env){
+    Env* previous = curr_env;
+    curr_env = env;
+    try {
+        for(auto& s : stmts) execute(s.get());
+    } catch(...){
+        curr_env = previous;
+        delete env;
+        throw;
+    }
+    curr_env = previous;
+    delete env;
+}
+
+void Interpreter::visitBlockStmt(Statement::Block* stmt){
+    Env* blockEnv = new Env(curr_env);
+    executeBlock(stmt->statements, blockEnv);
+}
+
+void Interpreter::visitIfStmt(Statement::If* stmt){
+    if(isTruthy(evaluate(stmt->condition.get()))) execute(stmt->thenBranch.get());
+    else if(stmt->elseBranch)                     execute(stmt->elseBranch.get());
+}
+
+void Interpreter::execute(Statement::Stmt* stmt){
+    stmt->accept(*this);
+}
+
+void Interpreter::interpret(std::vector<std::shared_ptr<Statement::Stmt>>& statements){
+    for(auto& s : statements){
+        try { execute(s.get()); }
         catch(const RuntimeError& e){ Debug::runtimeError(e); }
     }
 }
 
-void Interpreter::execute(std::shared_ptr<Statement::Stmt> statement){
-    statement->accept(*this);
-}
-
-std::any Interpreter::visitExpressionStmt(std::shared_ptr<Statement::Expression> stmt){
-    evaluate(stmt->expression);
-    return {};
-}
-
-std::any Interpreter::visitProclaimStmt(std::shared_ptr<Statement::Proclaim> stmt){
-    std::cout << stringify(evaluate(stmt->expression)) << '\n';
-    return {};
-}
-
-std::any Interpreter::visitVariable(std::shared_ptr<Variable> expr){
-    return curr_env->get(expr->name);
-}
-
-std::any Interpreter::visitAssignStmt(std::shared_ptr<Statement::Assign> stmt){
-    /* verifica se o lado direito é uma variável  se for, compartilha o ptr
-     graph sharing: y = x ... y e x apontam para o mesmo objeto
-     Tenta obter o ptr da variável do lado direito
-     (só funciona se o valor for uma Variable direta) */
-    std::any value = evaluate(stmt->value);
-
-    /* graph sharing: se o rhs era uma Variable, compartilha o ptr
-     O evaluate já retornou o valor; para graph sharing real,
-     verificamos se o stmt->value é um Variable node*/
-    if(auto* varNode = dynamic_cast<Variable*>(stmt->value.get())){
-        auto ptr = curr_env->getPtrByName(varNode->name.lexeme);
-        if(ptr) {
-            curr_env->defineShared(stmt->name.lexeme, ptr, stmt->name.line);
-            return {};
-        }
-    }
-
-    curr_env->define(stmt->name.lexeme, std::move(value), stmt->name.line);
-    return {};
-}
-
-std::any Interpreter::visitAssignExpr(std::shared_ptr<Assign> expr){
-    std::any value = evaluate(expr->value);
-    curr_env->assign(expr->name, value);
-    return value;
-}
-
-std::any Interpreter::visitVarStmt(std::shared_ptr<Statement::Var> stmt){
-    std::any value = nullptr;
-    if(stmt->init != nullptr) value = evaluate(stmt->init);
-    curr_env->define(stmt->name.lexeme, std::move(value), stmt->name.line);
-    return {};
-}
-
-void Interpreter::executeBlock(const std::vector<std::shared_ptr<Statement::Stmt>> &statements,
-                               std::shared_ptr<Env> new_env){
-    std::shared_ptr<Env> previous = curr_env;
-    try{
-        curr_env = new_env;
-        for(const auto& s : statements) execute(s);
-    }catch(...){ curr_env = previous; throw; }
-    curr_env = previous;
-}
-
-std::any Interpreter::visitBlockStmt(std::shared_ptr<Statement::Block> stmt){
-    executeBlock(stmt->statements, std::make_shared<Env>(curr_env));
-    return {};
-}
-
-std::any Interpreter::visitIfStmt(std::shared_ptr<Statement::If> stmt){
-    if(isTruthy(evaluate(stmt->condition))) execute(stmt->thenBranch);
-    else if(stmt->elseBranch != nullptr)    execute(stmt->elseBranch);
-    return {};
-}
-
-std::any Interpreter::visitLogicalExpr(std::shared_ptr<Logical> expr){
-    std::any left = evaluate(expr->left);
-    if(expr->oper.type == TokenType::OR){ if(isTruthy(left)) return left; }
-    else                                { if(!isTruthy(left)) return left; }
-    return evaluate(expr->right);
-}
-
-std::any Interpreter::visitTypeOfExpr(std::shared_ptr<TypeOf> expr){
-    std::any value = evaluate(expr->operand);
-    if(value.type() == typeid(nullptr))     return std::string("nil");
-    if(value.type() == typeid(bool))        return std::string("bool");
-    if(value.type() == typeid(std::string)) return std::string("str");
-    if(isBigInt(value))                     return std::string("int");
-    if(isBigFloat(value))                   return std::string("float");
-    return std::string("unknown");
-}
-
-std::any Interpreter::visitStringInterp(std::shared_ptr<StringInterp> expr){
-    std::string result;
-    for(auto& part : expr->parts)
-        result += stringify(evaluate(part));
-    return result;
+void Interpreter::gcRegisterEnv(Env* env){
+    if(env) env->gcMark();
 }

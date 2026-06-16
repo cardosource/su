@@ -22,16 +22,41 @@ public:
         while(u){ digits.push_back(u % BASE); u /= BASE; }
     }
 
+
+    BigInt(const BigInt& other) : digits(other.digits), negative(other.negative) {}
+    
+
+    BigInt& operator=(const BigInt& other) {
+        if (this != &other) {
+            digits = other.digits;
+            negative = other.negative;
+        }
+        return *this;
+    }
+    
+
+    BigInt(BigInt&& other) noexcept : digits(std::move(other.digits)), negative(other.negative) {}
+    
+    BigInt& operator=(BigInt&& other) noexcept {
+        if (this != &other) {
+            digits = std::move(other.digits);
+            negative = other.negative;
+        }
+        return *this;
+    }
+    
+
+    ~BigInt() = default;
+
     explicit BigInt(const std::string& s){
         if(s.empty()) { digits.push_back(0); return; }
         size_t i = 0;
         if(s[0] == '-'){ negative = true; i = 1; }
         else if(s[0] == '+'){ i = 1; }
-        // remove zeros à esquerda
+
         while(i < s.size()-1 && s[i] == '0') i++;
         for(size_t j = i; j < s.size(); j++)
             if(!isdigit(s[j])) throw std::invalid_argument("BigInt: caracter inválido '"+std::string(1,s[j])+"'");
-        // preenche de trás para frente em chunks de 9
         int end = (int)s.size();
         while(end > (int)i){
             int start = std::max((int)i, end - 9);
@@ -222,6 +247,35 @@ public:
     BigFloat(const BigInt& i) : mantissa(i), exponent(0), negative(i.negative) {
         mantissa.negative = false;
     }
+
+    // Copy constructor
+    BigFloat(const BigFloat& other) : mantissa(other.mantissa), exponent(other.exponent), negative(other.negative) {}
+    
+    // Copy assignment
+    BigFloat& operator=(const BigFloat& other) {
+        if (this != &other) {
+            mantissa = other.mantissa;
+            exponent = other.exponent;
+            negative = other.negative;
+        }
+        return *this;
+    }
+    
+    // Move constructor
+    BigFloat(BigFloat&& other) noexcept : mantissa(std::move(other.mantissa)), exponent(other.exponent), negative(other.negative) {}
+    
+    // Move assignment
+    BigFloat& operator=(BigFloat&& other) noexcept {
+        if (this != &other) {
+            mantissa = std::move(other.mantissa);
+            exponent = other.exponent;
+            negative = other.negative;
+        }
+        return *this;
+    }
+    
+    // Destructor
+    ~BigFloat() = default;
 
     static BigFloat fromString(const std::string& s){
         BigFloat r;

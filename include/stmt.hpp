@@ -1,74 +1,49 @@
 #pragma once
 #include "visitor.hpp"
 #include "token.hpp"
-#include <any>
+#include "expr.hpp"
 #include <memory>
 #include <vector>
 
-namespace Statement{
+namespace Statement {
 
-  struct Expression : Stmt, public std::enable_shared_from_this<Expression>{
-     const std::shared_ptr<Expr> expression;
-     Expression(std::shared_ptr<Expr> expression);
-     std::any accept(StmtVisitor& visitor) override;
-  };
+struct Expression : Stmt {
+    std::shared_ptr<Expr> expression;
+    Expression(std::shared_ptr<Expr> e) : expression(std::move(e)) {}
+    void accept(StmtVisitor& v) override { v.visitExpressionStmt(this); }
+};
 
-  struct Proclaim : Stmt, public std::enable_shared_from_this<Proclaim>{
-     const std::shared_ptr<Expr> expression;
-     Proclaim(std::shared_ptr<Expr> expression);
-     std::any accept(StmtVisitor& visitor) override;
-  };
+struct Proclaim : Stmt {
+    std::shared_ptr<Expr> expression;
+    Proclaim(std::shared_ptr<Expr> e) : expression(std::move(e)) {}
+    void accept(StmtVisitor& v) override { v.visitProclaimStmt(this); }
+};
 
-  struct Assign : Stmt, public std::enable_shared_from_this<Assign>{
-     Token name;
-     std::shared_ptr<Expr> value;
-     Assign(Token name, std::shared_ptr<Expr> value);
-     std::any accept(StmtVisitor& visitor) override;
-  };
+struct Assign : Stmt {
+    Token name; std::shared_ptr<Expr> value;
+    Assign(Token n, std::shared_ptr<Expr> val) : name(std::move(n)), value(std::move(val)) {}
+    void accept(StmtVisitor& v) override { v.visitAssignStmt(this); }
+};
 
-  struct Var : Stmt, public std::enable_shared_from_this<Var> {
-     Token name;
-     std::shared_ptr<Expr> init;
-     Var(Token name, std::shared_ptr<Expr> init);
-     std::any accept(StmtVisitor &visitor) override;
-  };
+struct Var : Stmt {
+    Token name; std::shared_ptr<Expr> init;
+    Var(Token n, std::shared_ptr<Expr> i) : name(std::move(n)), init(std::move(i)) {}
+    void accept(StmtVisitor& v) override { v.visitVarStmt(this); }
+};
 
-  inline Expression::Expression(std::shared_ptr<Expr> expression)
-    : expression(std::move(expression)) {}
-  inline std::any Expression::accept(StmtVisitor &visitor){
-    return visitor.visitExpressionStmt(shared_from_this());
-  }
-
-  inline Proclaim::Proclaim(std::shared_ptr<Expr> expression)
-    : expression(std::move(expression)) {}
-  inline std::any Proclaim::accept(StmtVisitor &visitor){
-    return visitor.visitProclaimStmt(shared_from_this());
-  }
-
-  inline Assign::Assign(Token name, std::shared_ptr<Expr> value)
-    : name(std::move(name)), value(std::move(value)) {}
-  inline std::any Assign::accept(StmtVisitor &visitor){
-    return visitor.visitAssignStmt(shared_from_this());
-  }
-
-  inline Var::Var(Token name, std::shared_ptr<Expr> init)
-    : name(std::move(name)), init(std::move(init)) {}
-  inline std::any Var::accept(StmtVisitor &visitor){
-    return visitor.visitVarStmt(shared_from_this());
-  }
-
-  struct Block: Stmt, public std::enable_shared_from_this<Block>{
+struct Block : Stmt {
     std::vector<std::shared_ptr<Stmt>> statements;
-    Block(std::vector<std::shared_ptr<Stmt>> statements);
-    std::any accept(StmtVisitor &visitor) override;
-  };
+    Block(std::vector<std::shared_ptr<Stmt>> s) : statements(std::move(s)) {}
+    void accept(StmtVisitor& v) override { v.visitBlockStmt(this); }
+};
 
-  struct If: Stmt, public std::enable_shared_from_this<If>{
+struct If : Stmt {
     std::shared_ptr<Expr> condition;
     std::shared_ptr<Stmt> thenBranch;
     std::shared_ptr<Stmt> elseBranch;
-    If(std::shared_ptr<Expr> condition, std::shared_ptr<Stmt> thenBranch,
-       std::shared_ptr<Stmt> elseBranch);
-    std::any accept(StmtVisitor &visitor) override;
-  };
-}
+    If(std::shared_ptr<Expr> c, std::shared_ptr<Stmt> t, std::shared_ptr<Stmt> e)
+        : condition(std::move(c)), thenBranch(std::move(t)), elseBranch(std::move(e)) {}
+    void accept(StmtVisitor& v) override { v.visitIfStmt(this); }
+};
+
+} // namespace Statement

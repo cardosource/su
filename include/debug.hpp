@@ -12,5 +12,5 @@ class Debug{
     inline static bool hardRuntimeError = false;
     static void error(int line, const std::string&);
     static void error(Token token, const std::string&);
-    static void runtimeError(RuntimeError error);  // por valor
+    static void runtimeError(RuntimeError error);   
 };

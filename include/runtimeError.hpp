@@ -3,7 +3,7 @@
 #include "token.hpp"
 
 struct RuntimeError : public std::runtime_error {
-  Token token;  // por VALOR — não referência, evita stack-use-after-return
+  Token token;
   RuntimeError(Token token, const std::string& message)
     : std::runtime_error(message), token(std::move(token)) {}
 };

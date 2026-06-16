@@ -1,56 +1,79 @@
 #pragma once
 #include "token.hpp"
 #include "expr.hpp"
-#include "debug.hpp"
 #include "visitor.hpp"
-#include <algorithm>
-#include <any>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
 #include "stmt.hpp"
 #include "environment.hpp"
+#include "gc.hpp"
+#include "debug.hpp"
+#include "bindings.hpp"
+#include <memory>
+#include <string>
+#include <vector>
+#include <unordered_map>
 
 class Interpreter : public ExprVisitor, public Statement::StmtVisitor {
 public:
     Interpreter();
-    void interpret(std::vector<std::shared_ptr<Statement::Stmt>> &statements);
-    void execute(std::shared_ptr<Statement::Stmt> statement);
-    void executeBlock(const std::vector<std::shared_ptr<Statement::Stmt>> &statements,
-                      std::shared_ptr<Env> new_env);
+    ~Interpreter();
 
-    std::any visitBinaryExpr(std::shared_ptr<Binary> expr) override;
-    std::any visitGroupingExpr(std::shared_ptr<Grouping> expr) override;
-    std::any visitLiteralExpr(std::shared_ptr<Literal> expr) override;
-    std::any visitUnaryExpr(std::shared_ptr<Unary> expr) override;
-    std::any visitVariable(std::shared_ptr<Variable> expr) override;
-    std::any visitAssignExpr(std::shared_ptr<Assign> expr) override;
-    std::any visitLogicalExpr(std::shared_ptr<Logical> expr) override;
-    std::any visitTypeOfExpr(std::shared_ptr<TypeOf> expr) override;
-    std::any visitIdOfExpr(std::shared_ptr<IdOf> expr) override;
-    std::any visitCompoundAssign(std::shared_ptr<CompoundAssign> expr) override;
-    std::any visitPreIncDec(std::shared_ptr<PreIncDec> expr) override;
-    std::any visitPostIncDec(std::shared_ptr<PostIncDec> expr) override;
-    std::any visitStringInterp(std::shared_ptr<StringInterp> expr) override;
+    void interpret(std::vector<std::shared_ptr<Statement::Stmt>>& statements);
+    void execute(Statement::Stmt* statement);
+    void executeBlock(std::vector<std::shared_ptr<Statement::Stmt>>& stmts, Env* env);
 
-    std::any visitExpressionStmt(std::shared_ptr<Statement::Expression> stmt) override;
-    std::any visitProclaimStmt(std::shared_ptr<Statement::Proclaim> stmt) override;
-    std::any visitAssignStmt(std::shared_ptr<Statement::Assign> stmt) override;
-    std::any visitVarStmt(std::shared_ptr<Statement::Var> stmt) override;
-    std::any visitBlockStmt(std::shared_ptr<Statement::Block> stmt) override;
-    std::any visitIfStmt(std::shared_ptr<Statement::If> stmt) override;
+    // Visitantes Expr
+    SuValue visitBinaryExpr(Binary* expr) override;
+    SuValue visitGroupingExpr(Grouping* expr) override;
+    SuValue visitLiteralExpr(Literal* expr) override;
+    SuValue visitUnaryExpr(Unary* expr) override;
+    SuValue visitVariable(Variable* expr) override;
+    SuValue visitAssignExpr(Assign* expr) override;
+    SuValue visitLogicalExpr(Logical* expr) override;
+    SuValue visitTypeOfExpr(TypeOf* expr) override;
+    SuValue visitIdOfExpr(IdOf* expr) override;
+    SuValue visitCompoundAssign(CompoundAssign* expr) override;
+    SuValue visitPreIncDec(PreIncDec* expr) override;
+    SuValue visitPostIncDec(PostIncDec* expr) override;
+    SuValue visitStringInterp(StringInterp* expr) override;
 
-    std::shared_ptr<Env> global;
-    std::string stringify(const std::any& object);
+    // Visitantes Stmt
+    void visitExpressionStmt(Statement::Expression* stmt) override;
+    void visitProclaimStmt(Statement::Proclaim* stmt) override;
+    void visitAssignStmt(Statement::Assign* stmt) override;
+    void visitVarStmt(Statement::Var* stmt) override;
+    void visitBlockStmt(Statement::Block* stmt) override;
+    void visitIfStmt(Statement::If* stmt) override;
+
+    // Utilitários
+    Env* global = nullptr;
+    static const char* typeStr(const SuValue& v);
+    std::string stringify(const SuValue& v);
+    
+    // Para funções nativas acessarem o interpretador
+    static Interpreter* instance;
 
 private:
-    void checkNumberOperand(const Token& oper, const std::any& operand);
-    void checkNumberOperands(const Token& oper, const std::any& left, const std::any& right);
-    bool isTruthy(const std::any& object);
-    bool isEqual(const std::any& a, const std::any& b);
-    std::any evaluate(std::shared_ptr<Expr> expr);
-    std::any applyArith(const Token& oper, std::any left, std::any right);
+    Env* curr_env = nullptr;
 
-    std::shared_ptr<Env> curr_env;
+    SuValue evaluate(Expr* expr);
+    bool    isTruthy(const SuValue& v);
+    bool    isEqual(const SuValue& a, const SuValue& b);
+    void    checkNumber(const Token& op, const SuValue& v);
+    void    checkNumbers(const Token& op, const SuValue& a, const SuValue& b);
+    SuValue applyArith(const Token& op, SuValue a, SuValue b);
+    void    gcRegisterEnv(Env* env);
+    
+    // IDs para valores inline
+    mutable std::unordered_map<uint64_t, uint64_t> inlineIds_;
+    mutable uint64_t nextInlineId_ = 1;
+    
+    uint64_t getInlineId(const SuValue& v) const;
+    
+
+
+    
+
+
 };
+
+

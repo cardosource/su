@@ -1,35 +1,64 @@
 #pragma once
-#include <string>
-#include <unordered_map>
-#include <any>
-#include <memory>
-#include "debug.hpp"
+#include "su_config.hpp"
+#include "gc.hpp"
 #include "token.hpp"
 
- 
-struct Binding {
-  std::shared_ptr<std::any> value;  // shared — graph sharing
-  bool immutable = true;            // immutable binding por padrão
-};
+#ifdef SU_NO_STL
+    // Versão sem STL (Arduino AVR)
+    #include <cstring>
+    
+    struct Binding {
+        char name[32];
+        SuValue value;
+        bool initialized;
+        bool immutable;
+    };
+    
+    class Env {
+    public:
+        Env();
+        Env(Env* enclosing);
+        ~Env();
 
-class Env: public std::enable_shared_from_this<Env> {
-private:
-  std::shared_ptr<Env> enclosing;
-  std::unordered_map<std::string, Binding> bindings;
+        void define(const std::string& name, SuValue value, int line = 0, bool immutable = true);
+        void assign(const Token& name, SuValue value);
+        SuValue get(const Token& name);
+        SuValue getByName(const std::string& name);
+        void gcMark();
 
-public:
-  Env();
-  Env(std::shared_ptr<Env> enclosing);
+        Env* enclosing;
+        
+    private:
+        Binding bindings[SU_MAX_VARS];
+        int bindingCount;
+    };
+    
+#else
+    // Versão com STL (PC, ESP32, etc)
+    #include <string>
+    #include <unordered_map>
+    
+    struct Binding {
+        SuValue value;
+        bool initialized;
+        bool immutable;
+    };
+    
+    class Env {
+    public:
+        Env();
+        Env(Env* enclosing);
+        ~Env();
 
- 
-  void define(const std::string& name, std::any value, int line = 0);
- 
-  void defineShared(const std::string& name, std::shared_ptr<std::any> ptr, int line = 0);
+        void define(const std::string& name, SuValue value, int line = 0, bool immutable = true);
+        void assign(const Token& name, SuValue value);
+        SuValue get(const Token& name);
+        SuValue getByName(const std::string& name);
+        void gcMark();
 
-  void assign(const Token& name, std::any value);
-
-  std::any get(const Token& name);
-
-  std::shared_ptr<std::any> getPtr(const Token& name);
-  std::shared_ptr<std::any> getPtrByName(const std::string& name);
-};
+        Env* enclosing;
+        
+    private:
+        std::unordered_map<std::string, Binding> bindings;
+    };
+#endif

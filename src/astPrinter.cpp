@@ -1,78 +1,139 @@
 #include "astPrinter.hpp"
-#define assert(E) // REMOVER DEPOIS
 
-std::string AstPrinter::print(std::shared_ptr<Expr> expr) {
-  try {
-    return std::any_cast<std::string>(expr->accept(*this));
-  } catch (const std::bad_any_cast &e) {
-    std::cout << "AstPrinter::print -> " << e.what() << "\n"; // debug
-    return "something";
-  }
+static std::string toString(Expr* expr) {
+    if (!expr) return "nil";
+    AstPrinter printer;
+    return printer.print(expr);
 }
 
-std::any AstPrinter::visitBinaryExpr(std::shared_ptr<Binary> expr) {
-  return parenthesize(expr->oper.lexeme, expr->left, expr->right);
+static std::string toString(const std::string& str) {
+    return str;
 }
 
-std::any AstPrinter::visitGroupingExpr(std::shared_ptr<Grouping> expr) {
-  return parenthesize("group", expr->expression);
+static std::string toString(const Token& token) {
+    return token.lexeme;
 }
 
-std::any AstPrinter::visitLiteralExpr(std::shared_ptr<Literal> expr) {
-  auto &type = expr->value.type();
+static std::string toString(const std::shared_ptr<Expr>& expr) {
+    return toString(expr.get());
+}
 
-
-  if (type == typeid(nullptr)) return "nil";
-  else if (type == typeid(std::string)) {
-    try {
-      return std::any_cast<std::string>(expr->value);
-    } catch (const std::bad_any_cast &e) {
-      std::cout << "Ast::visitLiteralExpr -> " << e.what() << "\n";
+std::string AstPrinter::print(Expr* expr) {
+    if (!expr) return "nil";
+    SuValue result = expr->accept(*this);
+    if (result.isString()) {
+        return std::string(result.asString()->data, result.asString()->len);
     }
-  } else if (type == typeid(int)) { // suporte para int
-    return std::to_string(std::any_cast<int>(expr->value));
-  } else if (type == typeid(double)) {
-    return std::to_string(std::any_cast<double>(expr->value));
-  } else if (type == typeid(bool)) {
-    if (std::any_cast<bool>(expr->value)) {
-      std::string result{"true"};
-      return result;
+    return "unknown";
+}
+
+std::string AstPrinter::parenthesize(std::string_view name) {
+    std::ostringstream buffer;
+    buffer << "(" << name << ")";
+    return buffer.str();
+}
+
+template<typename T>
+std::string AstPrinter::parenthesize(std::string_view name, T&& first) {
+    std::ostringstream buffer;
+    buffer << "(" << name;
+    buffer << " " << toString(std::forward<T>(first));
+    buffer << ")";
+    return buffer.str();
+}
+
+template<typename T, typename... Rest>
+std::string AstPrinter::parenthesize(std::string_view name, T&& first, Rest&&... rest) {
+    std::ostringstream buffer;
+    buffer << "(" << name;
+    buffer << " " << toString(std::forward<T>(first));
+    ((buffer << " " << toString(std::forward<Rest>(rest))), ...);
+    buffer << ")";
+    return buffer.str();
+}
+
+SuValue AstPrinter::visitBinaryExpr(Binary* expr) {
+    std::string result = parenthesize(expr->oper.lexeme, expr->left, expr->right);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitGroupingExpr(Grouping* expr) {
+    std::string result = parenthesize("group", expr->expression);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitLiteralExpr(Literal* expr) {
+    std::string result;
+    if (expr->value.isNil()) {
+        result = "nil";
+    } else if (expr->value.isBool()) {
+        result = expr->value.asBool() ? "true" : "false";
+    } else if (expr->value.isInt()) {
+        result = std::to_string(expr->value.asInt());
+    } else if (expr->value.isString()) {
+        result = std::string(expr->value.asString()->data, expr->value.asString()->len);
     } else {
-      std::string result{"false"};
-      return result;
+        result = "literal";
     }
-  }
-  return "Literal type not recognized";
+    return SuValue::make_obj(SuString::create(result.c_str()));
 }
 
-std::any AstPrinter::visitUnaryExpr(std::shared_ptr<Unary> expr) {
-  return parenthesize(expr->oper.lexeme, expr->right);
+SuValue AstPrinter::visitUnaryExpr(Unary* expr) {
+    std::string result = parenthesize(expr->oper.lexeme, expr->right);
+    return SuValue::make_obj(SuString::create(result.c_str()));
 }
 
-template<class... E>
-std::string AstPrinter::parenthesize(std::string_view name, E... expr) {
-  assert((... && std::is_same_v<E, std::shared_ptr<Expr>>));
-  std::ostringstream buffer;
-  buffer << "(" << name;
-  ((buffer << " " << print(expr)), ...);
-  buffer << ")";
-  return buffer.str();
+SuValue AstPrinter::visitVariable(Variable* expr) {
+    std::string result = parenthesize(expr->name.lexeme);
+    return SuValue::make_obj(SuString::create(result.c_str()));
 }
 
-/*int main(){
-  auto expression = std::make_shared<Binary>(
-      std::make_shared<Unary>(
-        Token(TokenType::MINUS, "-", nullptr, 1), 
-        std::make_shared<Literal>(123)
-      ),
-      Token(TokenType::STAR, "*", nullptr, 1),
-      std::make_shared<Grouping>(
-       std::make_shared<Literal>(45.67)
-      )
-  );
+SuValue AstPrinter::visitAssignExpr(Assign* expr) {
+    std::string result = parenthesize("assign", expr->name.lexeme, expr->value);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
 
-  AstPrinter printer;
-  std::cout << printer.print(expression) << '\n';
-  
-  
-}*/
+SuValue AstPrinter::visitLogicalExpr(Logical* expr) {
+    std::string result = parenthesize(expr->oper.lexeme, expr->left, expr->right);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitTypeOfExpr(TypeOf* expr) {
+    std::string result = parenthesize("typeof", expr->operand);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitIdOfExpr(IdOf* expr) {
+    std::string result = parenthesize("idof", expr->name);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitCompoundAssign(CompoundAssign* expr) {
+    std::string result = parenthesize(expr->oper.lexeme, expr->name.lexeme, expr->value);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitPreIncDec(PreIncDec* expr) {
+    std::string result = parenthesize(expr->oper.lexeme, expr->name);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitPostIncDec(PostIncDec* expr) {
+    std::string result = parenthesize(expr->name.lexeme, expr->oper.lexeme);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitStringInterp(StringInterp* expr) {
+    std::string result = "(";
+    for (auto& part : expr->parts) {
+        result += " " + toString(part);
+    }
+    result += " )";
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+// Instanciação explícita dos templates
+template std::string AstPrinter::parenthesize<std::shared_ptr<Expr>&>(std::string_view, std::shared_ptr<Expr>&);
+template std::string AstPrinter::parenthesize<const std::string&, std::shared_ptr<Expr>&>(std::string_view, const std::string&, std::shared_ptr<Expr>&);
+template std::string AstPrinter::parenthesize<std::shared_ptr<Expr>&, std::shared_ptr<Expr>&>(std::string_view, std::shared_ptr<Expr>&, std::shared_ptr<Expr>&);
+template std::string AstPrinter::parenthesize<Token&>(std::string_view, Token&);

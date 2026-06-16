@@ -94,10 +94,12 @@ std::shared_ptr<Expr> Parser::postfix(){
 }
 
 std::shared_ptr<Expr> Parser::primary(){
-  if(match(TokenType::MY_FALSE)) return std::make_shared<Literal>(false);
-  if(match(TokenType::MY_TRUE))  return std::make_shared<Literal>(true);
-  if(match(TokenType::NIL))      return std::make_shared<Literal>(nullptr);
-
+  if(match(TokenType::MY_FALSE)) 
+    return std::make_shared<Literal>(SuValue::make_bool(false));
+  if(match(TokenType::MY_TRUE))  
+    return std::make_shared<Literal>(SuValue::make_bool(true));
+  if(match(TokenType::NIL))      
+    return std::make_shared<Literal>(SuValue::nil());
 
   if(match(TokenType::TYPEOF)){
     consume(TokenType::LEFT_PAREN, "Expected '(' after 'typeOf'.");
@@ -106,7 +108,6 @@ std::shared_ptr<Expr> Parser::primary(){
     return std::make_shared<TypeOf>(operand);
   }
 
-  // id(variavel) — endereço hex do binding
   if(match(TokenType::ID_OF)){
     consume(TokenType::LEFT_PAREN, "Expected '(' after 'id'.");
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name inside id().");
@@ -114,17 +115,42 @@ std::shared_ptr<Expr> Parser::primary(){
     return std::make_shared<IdOf>(name);
   }
 
-  if(match(TokenType::IDENTIFIER)) return std::make_shared<Variable>(previous());
+  if(match(TokenType::IDENTIFIER)) 
+    return std::make_shared<Variable>(previous());
 
-  if(match(TokenType::INT, TokenType::FLOAT))
-    return std::make_shared<Literal>(previous().literal);
+  if(match(TokenType::INT)){
+    BigInt bi = std::any_cast<BigInt>(previous().literal);
+    std::string s = bi.toString();
+    try {
+      int64_t val = std::stoll(s);
+      return std::make_shared<Literal>(SuValue::make_int(val));
+    } catch(...) {
+      void* mem = gcAlloc(sizeof(SuBigInt));
+      if (!mem) return std::make_shared<Literal>(SuValue::nil());
+      SuBigInt* obj = new(mem) SuBigInt(bi);
+      obj->type = ObjType::BIGINT;
+      return std::make_shared<Literal>(SuValue::make_obj(obj));
+    }
+  }
+
+  if(match(TokenType::FLOAT)){
+    BigFloat bf = std::any_cast<BigFloat>(previous().literal);
+    double doubleValue = bf.toDouble();
+    void* mem = gcAlloc(sizeof(SuBigFloat));
+    if (!mem) return std::make_shared<Literal>(SuValue::nil());
+    SuBigFloat* obj = new(mem) SuBigFloat();
+    obj->type = ObjType::BIGFLOAT;
+    obj->value = doubleValue;
+    return std::make_shared<Literal>(SuValue::make_obj(obj));
+  }
 
   if(match(TokenType::STRING)){
     Token tok = previous();
     std::string raw = std::any_cast<std::string>(tok.literal);
     if(raw.find('#') != std::string::npos)
       return parseStringInterp(raw, tok.line);
-    return std::make_shared<Literal>(tok.literal);
+    SuString* str = SuString::create(raw.c_str(), raw.length());
+    return std::make_shared<Literal>(SuValue::make_obj(str));
   }
 
   if(match(TokenType::LEFT_PAREN)){
@@ -163,7 +189,7 @@ Token Parser::advance(){
 Token Parser::peek(){ return tokens.at(current); }
 
 Token Parser::previous(){
-  if(current == 0) return Token{TokenType::MY_EOF, "", nullptr, 0};
+  if(current == 0) return Token{TokenType::MY_EOF, "", std::any{}, 0};
   return tokens.at(current - 1);
 }
 
@@ -307,7 +333,8 @@ std::shared_ptr<Expr> Parser::parseStringInterp(const std::string& raw, int line
 
   auto flushBuf = [&](){
     if(!buf.empty()){
-      parts.push_back(std::make_shared<Literal>(std::any(buf)));
+      SuString* str = SuString::create(buf.c_str(), buf.length());
+      parts.push_back(std::make_shared<Literal>(SuValue::make_obj(str)));
       buf.clear();
     }
   };

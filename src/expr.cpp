@@ -1,52 +1,91 @@
 #include "expr.hpp"
-#include "visitor.hpp"
-#include <any>
-#include <memory>
-#include <utility>
+Binary::Binary(std::shared_ptr<Expr> l, Token op, std::shared_ptr<Expr> r)
+    : left(std::move(l)), oper(std::move(op)), right(std::move(r)) {}
 
-Binary::Binary(std::shared_ptr<Expr> left, Token oper, std::shared_ptr<Expr> right)
-    : left{std::move(left)}, oper{std::move(oper)}, right{std::move(right)} {}
-std::any Binary::accept(ExprVisitor &v){ return v.visitBinaryExpr(shared_from_this()); }
+SuValue Binary::accept(ExprVisitor& v) {
+    return v.visitBinaryExpr(this);
+}
 
-Grouping::Grouping(std::shared_ptr<Expr> expression) : expression{std::move(expression)} {}
-std::any Grouping::accept(ExprVisitor &v){ return v.visitGroupingExpr(shared_from_this()); }
+Grouping::Grouping(std::shared_ptr<Expr> e)
+    : expression(std::move(e)) {}
 
-Literal::Literal(std::any value) : value{std::move(value)} {}
-std::any Literal::accept(ExprVisitor &v){ return v.visitLiteralExpr(shared_from_this()); }
+SuValue Grouping::accept(ExprVisitor& v) {
+    return v.visitGroupingExpr(this);
+}
 
-Unary::Unary(Token oper, std::shared_ptr<Expr> right)
-    : oper{std::move(oper)}, right{std::move(right)} {}
-std::any Unary::accept(ExprVisitor &v){ return v.visitUnaryExpr(shared_from_this()); }
+Literal::Literal(SuValue val)
+    : value(val) {}
 
-Variable::Variable(Token name) : name{std::move(name)} {}
-std::any Variable::accept(ExprVisitor &v){ return v.visitVariable(shared_from_this()); }
+SuValue Literal::accept(ExprVisitor& v) {
+    return v.visitLiteralExpr(this);
+}
 
-Assign::Assign(Token name, std::shared_ptr<Expr> value)
-    : name{std::move(name)}, value{std::move(value)} {}
-std::any Assign::accept(ExprVisitor &v){ return v.visitAssignExpr(shared_from_this()); }
+Unary::Unary(Token op, std::shared_ptr<Expr> r)
+    : oper(std::move(op)), right(std::move(r)) {}
 
-Logical::Logical(std::shared_ptr<Expr> left, Token oper, std::shared_ptr<Expr> right)
-    : left{std::move(left)}, oper{std::move(oper)}, right{std::move(right)} {}
-std::any Logical::accept(ExprVisitor &v){ return v.visitLogicalExpr(shared_from_this()); }
+SuValue Unary::accept(ExprVisitor& v) {
+    return v.visitUnaryExpr(this);
+}
 
-TypeOf::TypeOf(std::shared_ptr<Expr> operand) : operand{std::move(operand)} {}
-std::any TypeOf::accept(ExprVisitor &v){ return v.visitTypeOfExpr(shared_from_this()); }
+Variable::Variable(Token n)
+    : name(std::move(n)) {}
 
-IdOf::IdOf(Token name) : name{std::move(name)} {}
-std::any IdOf::accept(ExprVisitor &v){ return v.visitIdOfExpr(shared_from_this()); }
+SuValue Variable::accept(ExprVisitor& v) {
+    return v.visitVariable(this);
+}
 
-CompoundAssign::CompoundAssign(Token name, Token oper, std::shared_ptr<Expr> value)
-    : name{std::move(name)}, oper{std::move(oper)}, value{std::move(value)} {}
-std::any CompoundAssign::accept(ExprVisitor &v){ return v.visitCompoundAssign(shared_from_this()); }
+Assign::Assign(Token n, std::shared_ptr<Expr> val)
+    : name(std::move(n)), value(std::move(val)) {}
 
-PreIncDec::PreIncDec(Token oper, Token name)
-    : oper{std::move(oper)}, name{std::move(name)} {}
-std::any PreIncDec::accept(ExprVisitor &v){ return v.visitPreIncDec(shared_from_this()); }
+SuValue Assign::accept(ExprVisitor& v) {
+    return v.visitAssignExpr(this);
+}
 
-PostIncDec::PostIncDec(Token name, Token oper)
-    : name{std::move(name)}, oper{std::move(oper)} {}
-std::any PostIncDec::accept(ExprVisitor &v){ return v.visitPostIncDec(shared_from_this()); }
+Logical::Logical(std::shared_ptr<Expr> l, Token op, std::shared_ptr<Expr> r)
+    : left(std::move(l)), oper(std::move(op)), right(std::move(r)) {}
 
-StringInterp::StringInterp(std::vector<std::shared_ptr<Expr>> parts)
-    : parts{std::move(parts)} {}
-std::any StringInterp::accept(ExprVisitor &v){ return v.visitStringInterp(shared_from_this()); }
+SuValue Logical::accept(ExprVisitor& v) {
+    return v.visitLogicalExpr(this);
+}
+
+TypeOf::TypeOf(std::shared_ptr<Expr> e)
+    : operand(std::move(e)) {}
+
+SuValue TypeOf::accept(ExprVisitor& v) {
+    return v.visitTypeOfExpr(this);
+}
+
+IdOf::IdOf(Token n)
+    : name(std::move(n)) {}
+
+SuValue IdOf::accept(ExprVisitor& v) {
+    return v.visitIdOfExpr(this);
+}
+
+CompoundAssign::CompoundAssign(Token n, Token op, std::shared_ptr<Expr> val)
+    : name(std::move(n)), oper(std::move(op)), value(std::move(val)) {}
+
+SuValue CompoundAssign::accept(ExprVisitor& v) {
+    return v.visitCompoundAssign(this);
+}
+
+PreIncDec::PreIncDec(Token op, Token n)
+    : oper(std::move(op)), name(std::move(n)) {}
+
+SuValue PreIncDec::accept(ExprVisitor& v) {
+    return v.visitPreIncDec(this);
+}
+
+PostIncDec::PostIncDec(Token n, Token op)
+    : name(std::move(n)), oper(std::move(op)) {}
+
+SuValue PostIncDec::accept(ExprVisitor& v) {
+    return v.visitPostIncDec(this);
+}
+
+StringInterp::StringInterp(std::vector<std::shared_ptr<Expr>> p)
+    : parts(std::move(p)) {}
+
+SuValue StringInterp::accept(ExprVisitor& v) {
+    return v.visitStringInterp(this);
+}

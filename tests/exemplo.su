@@ -1,4 +1,5 @@
 
+
 nome    = "Karl";
 idade   = 42;
 altura  = 1.75;
@@ -6,9 +7,7 @@ ativo   = true;
 inativo = false;
 nada    = nil;
 proclaim(id(nome));
-
 nome="aa";
-
 proclaim(id(nome));
 proclaim("1. TIPOS");
 proclaim(nome);
@@ -224,4 +223,3 @@ proclaim(false or 42);
 proclaim("existe" or "outro");
 proclaim(true and "fim");
 proclaim(false and "nunca");
-

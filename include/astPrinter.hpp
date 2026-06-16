@@ -1,18 +1,33 @@
 #pragma once
 #include <iostream>
 #include <sstream>
+#include <string>
 #include "expr.hpp"
 
+class AstPrinter : public ExprVisitor {
+private:
+    std::string parenthesize(std::string_view name);
+    
+    template<typename T>
+    std::string parenthesize(std::string_view name, T&& arg);
+    
+    template<typename T, typename... Rest>
+    std::string parenthesize(std::string_view name, T&& first, Rest&&... rest);
+    
+public:
+    std::string print(Expr* expr);
 
-class AstPrinter: public ExprVisitor {
-  private:
-    template<class... E>
-      std::string parenthesize(std::string_view name, E... expr);
-  public:
-    std::string print(std::shared_ptr<Expr> expr);
-
-    std::any visitBinaryExpr(std::shared_ptr<Binary> expr);
-    std::any visitGroupingExpr(std::shared_ptr<Grouping> expr);
-    std::any visitLiteralExpr(std::shared_ptr<Literal> expr);
-    std::any visitUnaryExpr(std::shared_ptr<Unary> expr);
+    SuValue visitBinaryExpr(Binary* expr) override;
+    SuValue visitGroupingExpr(Grouping* expr) override;
+    SuValue visitLiteralExpr(Literal* expr) override;
+    SuValue visitUnaryExpr(Unary* expr) override;
+    SuValue visitVariable(Variable* expr) override;
+    SuValue visitAssignExpr(Assign* expr) override;
+    SuValue visitLogicalExpr(Logical* expr) override;
+    SuValue visitTypeOfExpr(TypeOf* expr) override;
+    SuValue visitIdOfExpr(IdOf* expr) override;
+    SuValue visitCompoundAssign(CompoundAssign* expr) override;
+    SuValue visitPreIncDec(PreIncDec* expr) override;
+    SuValue visitPostIncDec(PostIncDec* expr) override;
+    SuValue visitStringInterp(StringInterp* expr) override;
 };

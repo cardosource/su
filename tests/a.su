@@ -1,0 +1,9 @@
+// a.su
+nome = "joao";
+idade = 25;
+//idade = 25;
+
+
+proclaim(nome);   // vai mostrar um endereço hex: 0x...
+proclaim(id(idade));  
+//proclaim(id(altura)); // endereço hex (BigFloat é objeto GC)
