@@ -2,7 +2,7 @@ name: Pipeline SU Functional
 
 on:
   push:
-    branches: [ master, convidado ]
+    branches: [ main, convidado ]
 
 jobs:
   build-and-run:
