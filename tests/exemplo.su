@@ -223,3 +223,23 @@ proclaim(false or 42);
 proclaim("existe" or "outro");
 proclaim(true and "fim");
 proclaim(false and "nunca");
+
+
+proclaim("=== ACESSO BÁSICO ===");
+
+numeros = [10, 20, 30, 40, 50];
+
+
+proclaim("tamanho : " + len(numeros));
+proclaim("Lista completa: " + numeros);
+
+proclaim("numeros[0] = " + numeros[0]);  // 10
+proclaim("numeros[1] = " + numeros[1]);  // 20
+proclaim("numeros[2] = " + numeros[2]);  // 30
+proclaim("numeros[3] = " + numeros[3]);  // 40
+proclaim("numeros[4] = " + numeros[4]);  // 50
+
+i = 2;
+proclaim("numeros[i] = " + numeros[i]);  // 30
+proclaim("numeros[i + 1] = " + numeros[i + 1]);  // 40
+

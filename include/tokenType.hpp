@@ -28,7 +28,7 @@ enum class TokenType {
   // Palavras-chave
   AND, CLASS, ELSE, MY_FALSE, FUN, IF, NIL, OR,
   PROCLAIM, RETURN, SUPER, THIS, MY_TRUE, VAR,
-  TYPEOF, ID_OF,
+  TYPEOF, ID_OF,LEN,
 
   // Token para final de declaração
   MY_EOF

@@ -15,7 +15,6 @@ class Scanner{
    std::vector<Token> tokens;
    std::unordered_map<std::string,TokenType> keywords = {
 {"and",       TokenType::AND},
-{"class",     TokenType::CLASS},
 {"else",      TokenType::ELSE},
 {"false",     TokenType::MY_FALSE},
 {"fun",       TokenType::FUN},
@@ -24,11 +23,9 @@ class Scanner{
 {"or",        TokenType::OR},
 {"proclaim",  TokenType::PROCLAIM},
 {"return",    TokenType::RETURN},
-{"super",     TokenType::SUPER},
-{"this",      TokenType::THIS},
 {"true",      TokenType::MY_TRUE},
-{"var",       TokenType::VAR},
 {"typeOf",    TokenType::TYPEOF},
+{"len",       TokenType::LEN},
 {"id",        TokenType::ID_OF}
    };
 

@@ -26,8 +26,11 @@ public:
     SuValue visitLogicalExpr(Logical* expr) override;
     SuValue visitTypeOfExpr(TypeOf* expr) override;
     SuValue visitIdOfExpr(IdOf* expr) override;
+    SuValue visitLenExpr(Len* expr) override;
     SuValue visitCompoundAssign(CompoundAssign* expr) override;
     SuValue visitPreIncDec(PreIncDec* expr) override;
     SuValue visitPostIncDec(PostIncDec* expr) override;
     SuValue visitStringInterp(StringInterp* expr) override;
+    SuValue visitListLiteral(ListLiteral* expr) override;
+    SuValue visitListIndex(ListIndex* expr) override;
 };

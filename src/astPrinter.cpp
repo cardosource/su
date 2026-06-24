@@ -72,6 +72,8 @@ SuValue AstPrinter::visitLiteralExpr(Literal* expr) {
         result = std::to_string(expr->value.asInt());
     } else if (expr->value.isString()) {
         result = std::string(expr->value.asString()->data, expr->value.asString()->len);
+    } else if (expr->value.isList()) {
+        result = "list";
     } else {
         result = "literal";
     }
@@ -108,6 +110,11 @@ SuValue AstPrinter::visitIdOfExpr(IdOf* expr) {
     return SuValue::make_obj(SuString::create(result.c_str()));
 }
 
+SuValue AstPrinter::visitLenExpr(Len* expr) {
+    std::string result = parenthesize("len", expr->operand);
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
 SuValue AstPrinter::visitCompoundAssign(CompoundAssign* expr) {
     std::string result = parenthesize(expr->oper.lexeme, expr->name.lexeme, expr->value);
     return SuValue::make_obj(SuString::create(result.c_str()));
@@ -129,6 +136,21 @@ SuValue AstPrinter::visitStringInterp(StringInterp* expr) {
         result += " " + toString(part);
     }
     result += " )";
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitListLiteral(ListLiteral* expr) {
+    std::string result = "[";
+    for (size_t i = 0; i < expr->elements.size(); i++) {
+        if (i > 0) result += ", ";
+        result += toString(expr->elements[i]);
+    }
+    result += "]";
+    return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue AstPrinter::visitListIndex(ListIndex* expr) {
+    std::string result = parenthesize("index", expr->list, expr->index);
     return SuValue::make_obj(SuString::create(result.c_str()));
 }
 

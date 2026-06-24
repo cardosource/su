@@ -169,6 +169,16 @@ bool GC::markStep() {
     if (grayCount_ == 0) return false;
     GcObj* obj = popGray();
     if (!obj) return false;
+    
+    if (obj->type == ObjType::LIST) {
+        SuList* list = reinterpret_cast<SuList*>(obj);
+        for (size_t i = 0; i < list->length; i++) {
+            if (list->elements[i].isObj()) {
+                mark(list->elements[i].asObj());
+            }
+        }
+    }
+    
     return true;
 }
 
@@ -238,6 +248,9 @@ void GC::freeObj(GcObj* obj) {
             break;
         case ObjType::BIGFLOAT:
             size = sizeof(SuBigFloat);
+            break;
+        case ObjType::LIST:
+            size = sizeof(SuList);
             break;
         default:
             size = sizeof(GcObj);

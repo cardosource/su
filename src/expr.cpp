@@ -1,4 +1,5 @@
 #include "expr.hpp"
+
 Binary::Binary(std::shared_ptr<Expr> l, Token op, std::shared_ptr<Expr> r)
     : left(std::move(l)), oper(std::move(op)), right(std::move(r)) {}
 
@@ -62,6 +63,13 @@ SuValue IdOf::accept(ExprVisitor& v) {
     return v.visitIdOfExpr(this);
 }
 
+Len::Len(std::shared_ptr<Expr> e)
+    : operand(std::move(e)) {}
+
+SuValue Len::accept(ExprVisitor& v) {
+    return v.visitLenExpr(this);
+}
+
 CompoundAssign::CompoundAssign(Token n, Token op, std::shared_ptr<Expr> val)
     : name(std::move(n)), oper(std::move(op)), value(std::move(val)) {}
 
@@ -88,4 +96,18 @@ StringInterp::StringInterp(std::vector<std::shared_ptr<Expr>> p)
 
 SuValue StringInterp::accept(ExprVisitor& v) {
     return v.visitStringInterp(this);
+}
+
+ListLiteral::ListLiteral(std::vector<std::shared_ptr<Expr>> elems)
+    : elements(std::move(elems)) {}
+
+SuValue ListLiteral::accept(ExprVisitor& v) {
+    return v.visitListLiteral(this);
+}
+
+ListIndex::ListIndex(std::shared_ptr<Expr> l, std::shared_ptr<Expr> i)
+    : list(std::move(l)), index(std::move(i)) {}
+
+SuValue ListIndex::accept(ExprVisitor& v) {
+    return v.visitListIndex(this);
 }

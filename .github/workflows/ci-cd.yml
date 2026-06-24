@@ -1,4 +1,4 @@
-name: Pipeline SU Functional 
+name: Pipeline SU Functional - List 
 
 on:
   push:

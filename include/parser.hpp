@@ -44,6 +44,7 @@ private:
   std::shared_ptr<Expr> logicalOr();
   std::shared_ptr<Expr> logicalAnd();
   std::shared_ptr<Expr> parseStringInterp(const std::string& raw, int line);
+  std::shared_ptr<Expr> listLiteral();
 
   std::shared_ptr<Statement::Stmt> statement();
   std::shared_ptr<Statement::Stmt> proclaimStatement();

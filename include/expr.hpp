@@ -97,3 +97,23 @@ struct StringInterp : Expr {
     StringInterp(std::vector<std::shared_ptr<Expr>> p);
     SuValue accept(ExprVisitor& v) override;
 };
+
+struct ListLiteral : Expr {
+    std::vector<std::shared_ptr<Expr>> elements;
+    ListLiteral(std::vector<std::shared_ptr<Expr>> elems);
+    SuValue accept(ExprVisitor& v) override;
+};
+
+struct ListIndex : Expr {
+    std::shared_ptr<Expr> list;
+    std::shared_ptr<Expr> index;
+    ListIndex(std::shared_ptr<Expr> l, std::shared_ptr<Expr> i);
+    SuValue accept(ExprVisitor& v) override;
+};
+
+
+struct Len : Expr {
+    std::shared_ptr<Expr> operand;
+    Len(std::shared_ptr<Expr> e);
+    SuValue accept(ExprVisitor& v) override;
+};

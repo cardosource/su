@@ -6,6 +6,7 @@
 #include "visitor.hpp"
 #include "bignum.hpp"
 #include "scanner.hpp"
+#include "gc.hpp"
 #include <exception>
 #include <memory>
 #include <string>
@@ -83,6 +84,13 @@ std::shared_ptr<Expr> Parser::unary(){
 
 std::shared_ptr<Expr> Parser::postfix(){
   std::shared_ptr<Expr> expr = primary();
+  
+  while (match(TokenType::LEFT_BRACKET)) {
+      std::shared_ptr<Expr> index = expression();
+      consume(TokenType::RIGHT_BRACKET, "Expected ']' after index.");
+      expr = std::make_shared<ListIndex>(expr, index);
+  }
+  
   if(match(TokenType::PLUS_PLUS, TokenType::MINUS_MINUS)){
     Token oper = previous();
     if(Variable* v = dynamic_cast<Variable*>(expr.get())){
@@ -113,6 +121,13 @@ std::shared_ptr<Expr> Parser::primary(){
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name inside id().");
     consume(TokenType::RIGHT_PAREN, "Expected ')' after id operand.");
     return std::make_shared<IdOf>(name);
+  }
+
+  if(match(TokenType::LEN)){
+    consume(TokenType::LEFT_PAREN, "Expected '(' after 'len'.");
+    std::shared_ptr<Expr> operand = expression();
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after len operand.");
+    return std::make_shared<Len>(operand);
   }
 
   if(match(TokenType::IDENTIFIER)) 
@@ -159,7 +174,24 @@ std::shared_ptr<Expr> Parser::primary(){
     return std::make_shared<Grouping>(expr);
   }
 
+  if(match(TokenType::LEFT_BRACKET)){
+    return listLiteral();
+  }
+
   throw error(peek(), "Expected expression.");
+}
+
+std::shared_ptr<Expr> Parser::listLiteral() {
+    std::vector<std::shared_ptr<Expr>> elements;
+    
+    if (!check(TokenType::RIGHT_BRACKET)) {
+        do {
+            elements.push_back(expression());
+        } while (match(TokenType::COMMA));
+    }
+    
+    consume(TokenType::RIGHT_BRACKET, "Expected ']' after list elements.");
+    return std::make_shared<ListLiteral>(std::move(elements));
 }
 
 template<class...T>

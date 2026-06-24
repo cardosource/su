@@ -14,6 +14,9 @@ struct CompoundAssign;
 struct PreIncDec;
 struct PostIncDec;
 struct StringInterp;
+struct ListLiteral;
+struct ListIndex;
+struct Len;
 
 struct ExprVisitor {
     virtual SuValue visitBinaryExpr(Binary* expr) = 0;
@@ -29,6 +32,11 @@ struct ExprVisitor {
     virtual SuValue visitPreIncDec(PreIncDec* expr) = 0;
     virtual SuValue visitPostIncDec(PostIncDec* expr) = 0;
     virtual SuValue visitStringInterp(StringInterp* expr) = 0;
+    virtual SuValue visitListLiteral(ListLiteral* expr) = 0;
+    virtual SuValue visitListIndex(ListIndex* expr) = 0;
+    virtual SuValue visitLenExpr(Len* expr) = 0;
+
+
     virtual ~ExprVisitor() = default;
 };
 

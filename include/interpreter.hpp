@@ -21,7 +21,7 @@ public:
     void execute(Statement::Stmt* statement);
     void executeBlock(std::vector<std::shared_ptr<Statement::Stmt>>& stmts, Env* env);
 
-    // Visitantes Expr
+    // ExprVisitor
     SuValue visitBinaryExpr(Binary* expr) override;
     SuValue visitGroupingExpr(Grouping* expr) override;
     SuValue visitLiteralExpr(Literal* expr) override;
@@ -35,8 +35,12 @@ public:
     SuValue visitPreIncDec(PreIncDec* expr) override;
     SuValue visitPostIncDec(PostIncDec* expr) override;
     SuValue visitStringInterp(StringInterp* expr) override;
+    SuValue visitListLiteral(ListLiteral* expr) override;
+    SuValue visitListIndex(ListIndex* expr) override;   
+    SuValue visitLenExpr(Len* expr) override;
 
-    // Visitantes Stmt
+
+    // StmtVisitor
     void visitExpressionStmt(Statement::Expression* stmt) override;
     void visitProclaimStmt(Statement::Proclaim* stmt) override;
     void visitAssignStmt(Statement::Assign* stmt) override;
@@ -44,12 +48,10 @@ public:
     void visitBlockStmt(Statement::Block* stmt) override;
     void visitIfStmt(Statement::If* stmt) override;
 
-    // Utilitários
     Env* global = nullptr;
     static const char* typeStr(const SuValue& v);
     std::string stringify(const SuValue& v);
     
-    // Para funções nativas acessarem o interpretador
     static Interpreter* instance;
 
 private:
@@ -63,17 +65,8 @@ private:
     SuValue applyArith(const Token& op, SuValue a, SuValue b);
     void    gcRegisterEnv(Env* env);
     
-    // IDs para valores inline
     mutable std::unordered_map<uint64_t, uint64_t> inlineIds_;
     mutable uint64_t nextInlineId_ = 1;
     
     uint64_t getInlineId(const SuValue& v) const;
-    
-
-
-    
-
-
 };
-
-

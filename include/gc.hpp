@@ -1,6 +1,7 @@
 #pragma once
 #include "su_config.hpp"
 #include <cstring>
+#include <cstddef>
 
 enum class ObjType : uint8_t {
     STRING,
@@ -20,7 +21,7 @@ struct GcObj {
 struct SuString;
 struct SuBigFloat;
 struct SuBigInt;
-
+struct SuList;
 
 struct SuValue {
     enum class Tag : uint8_t { NIL, BOOL, INT, OBJ } tag = Tag::NIL;
@@ -43,15 +44,17 @@ struct SuValue {
     bool isString() const { return isObj() && obj->type == ObjType::STRING; }
     bool isFloat()  const { return isObj() && obj->type == ObjType::BIGFLOAT; }
     bool isBigInt() const { return isObj() && obj->type == ObjType::BIGINT; }
+    bool isList()   const { return isObj() && obj->type == ObjType::LIST; }
+    
 
     GcObj*    asObj()    const { return obj; }
     int64_t   asInt()    const { return integer; }
     bool      asBool()   const { return boolean; }
     SuString* asString() const { return reinterpret_cast<SuString*>(obj); }
+    SuList*   asList()   const { return reinterpret_cast<SuList*>(obj); }
 
     void gcMark() const;
 };
-//  GC - Gerenciador de memória
 
 class GC {
 public:
@@ -111,7 +114,6 @@ inline void* gcAlloc(size_t size) {
     return GC::instance().alloc(size);
 }
 
-
 struct SuString : GcObj {
     static constexpr size_t MAX_LEN = SU_MAX_STRING_LEN;
     char data[MAX_LEN];
@@ -125,6 +127,104 @@ struct SuString : GcObj {
 struct SuBigFloat : GcObj {
     double value = 0.0;
     static SuBigFloat* create(double v);
+};
+
+struct SuList : GcObj {
+    static constexpr size_t MAX_ELEMENTS = 128;
+    SuValue elements[MAX_ELEMENTS];
+    size_t length = 0;
+
+    static SuList* create() {
+        void* mem = gcAlloc(sizeof(SuList));
+        if (!mem) return nullptr;
+        SuList* list = new(mem) SuList();
+        list->type = ObjType::LIST;
+        list->marked = false;
+        list->next = nullptr;
+        list->length = 0;
+        return list;
+    }
+
+    static SuList* fromArray(const SuValue* arr, size_t len) {
+        if (len > MAX_ELEMENTS) return nullptr;
+        SuList* list = create();
+        if (!list) return nullptr;
+        list->length = len;
+        for (size_t i = 0; i < len; i++) {
+            list->elements[i] = arr[i];
+        }
+        return list;
+    }
+
+    SuValue get(size_t index) const {
+        if (index >= length) return SuValue::nil();
+        return elements[index];
+    }
+
+    SuList* concat(const SuList* other) const {
+        size_t newLen = length + other->length;
+        if (newLen > MAX_ELEMENTS) return nullptr;
+        
+        SuList* result = create();
+        if (!result) return nullptr;
+        
+        for (size_t i = 0; i < length; i++) {
+            result->elements[i] = elements[i];
+        }
+        for (size_t i = 0; i < other->length; i++) {
+            result->elements[length + i] = other->elements[i];
+        }
+        result->length = newLen;
+        return result;
+    }
+
+    SuList* sublist(size_t start, size_t end) const {
+        if (start > end || end > length) return nullptr;
+        size_t newLen = end - start;
+        if (newLen == 0) return create();
+        
+        SuList* result = create();
+        if (!result) return nullptr;
+        
+        for (size_t i = 0; i < newLen; i++) {
+            result->elements[i] = elements[start + i];
+        }
+        result->length = newLen;
+        return result;
+    }
+
+    bool contains(const SuValue& v) const {
+        for (size_t i = 0; i < length; i++) {
+            if (isEqual(elements[i], v)) return true;
+        }
+        return false;
+    }
+
+    size_t size() const { return length; }
+    bool empty() const { return length == 0; }
+
+private:
+    SuList() = default;
+
+    static bool isEqual(const SuValue& a, const SuValue& b) {
+        if (a.isNil() && b.isNil()) return true;
+        if (a.isNil() || b.isNil()) return false;
+        if (a.isBool() && b.isBool()) return a.asBool() == b.asBool();
+        if (a.isInt() && b.isInt()) return a.asInt() == b.asInt();
+        if (a.isString() && b.isString()) {
+            return strcmp(a.asString()->c_str(), b.asString()->c_str()) == 0;
+        }
+        if (a.isObj() && b.isObj() && a.obj->type == ObjType::LIST && b.obj->type == ObjType::LIST) {
+            const SuList* la = reinterpret_cast<const SuList*>(a.obj);
+            const SuList* lb = reinterpret_cast<const SuList*>(b.obj);
+            if (la->length != lb->length) return false;
+            for (size_t i = 0; i < la->length; i++) {
+                if (!isEqual(la->elements[i], lb->elements[i])) return false;
+            }
+            return true;
+        }
+        return false;
+    }
 };
 
 inline void SuValue::gcMark() const {

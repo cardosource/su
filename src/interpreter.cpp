@@ -2,6 +2,7 @@
 #include "debug.hpp"
 #include "runtimeError.hpp"
 #include "bignum.hpp"
+#include "gc.hpp"
 #include <cstring>
 #include <cstdio>
 #include <sstream>
@@ -93,6 +94,7 @@ const char* Interpreter::typeStr(const SuValue& v){
             case ObjType::BIGINT:   return "int";
             case ObjType::BIGFLOAT: return "float";
             case ObjType::STRING:   return "str";
+            case ObjType::LIST:     return "list";
             default: break;
         }
     }
@@ -115,6 +117,16 @@ std::string Interpreter::stringify(const SuValue& v){
                 char buf[64];
                 snprintf(buf, sizeof(buf), "%g", d);
                 return buf;
+            }
+            case ObjType::LIST:{
+                const SuList* list = reinterpret_cast<const SuList*>(v.obj);
+                std::string result = "[";
+                for (size_t i = 0; i < list->length; i++) {
+                    if (i > 0) result += ", ";
+                    result += stringify(list->elements[i]);
+                }
+                result += "]";
+                return result;
             }
             default: break;
         }
@@ -212,6 +224,15 @@ bool Interpreter::isEqual(const SuValue& a, const SuValue& b){
     if(isNumVal(a) && isNumVal(b)) return toDouble(a) == toDouble(b);
     if(a.isString() && b.isString())
         return strcmp(a.asString()->c_str(), b.asString()->c_str()) == 0;
+    if(a.isList() && b.isList()) {
+        const SuList* la = a.asList();
+        const SuList* lb = b.asList();
+        if(la->length != lb->length) return false;
+        for(size_t i = 0; i < la->length; i++) {
+            if(!isEqual(la->elements[i], lb->elements[i])) return false;
+        }
+        return true;
+    }
     return false;
 }
 
@@ -253,6 +274,15 @@ SuValue Interpreter::visitBinaryExpr(Binary* expr){
             if(left.isString() || right.isString()){
                 std::string s = stringify(left) + stringify(right);
                 return SuValue::make_obj(SuString::create(s.c_str()));
+            }
+            if(left.isList() && right.isList()) {
+                const SuList* la = left.asList();
+                const SuList* lb = right.asList();
+                SuList* result = la->concat(lb);
+                if (!result) {
+                    throw RuntimeError(expr->oper, "List concatenation overflow");
+                }
+                return SuValue::make_obj(result);
             }
             return applyArith(expr->oper, left, right);
         case TokenType::MINUS:
@@ -320,6 +350,23 @@ SuValue Interpreter::visitIdOfExpr(IdOf* expr){
     return SuValue::make_obj(SuString::create(buf));
 }
 
+SuValue Interpreter::visitLenExpr(Len* expr) {
+    SuValue v = evaluate(expr->operand.get());
+    
+    if (v.isList()) {
+        SuList* list = v.asList();
+        return SuValue::make_int(list->length);
+    }
+    
+    if (v.isString()) {
+        SuString* str = v.asString();
+        return SuValue::make_int(str->len);
+    }
+    
+    throw RuntimeError(Token{TokenType::LEN, "len", std::any{}, 0},
+                       "len() only works on strings and lists (got: " + std::string(typeStr(v)) + ")");
+}
+
 SuValue Interpreter::visitCompoundAssign(CompoundAssign* expr){
     SuValue cur = curr_env->get(expr->name);
     SuValue rhs = evaluate(expr->value.get());
@@ -365,6 +412,51 @@ SuValue Interpreter::visitStringInterp(StringInterp* expr){
     for(auto& part : expr->parts)
         result += stringify(evaluate(part.get()));
     return SuValue::make_obj(SuString::create(result.c_str()));
+}
+
+SuValue Interpreter::visitListLiteral(ListLiteral* expr){
+    SuValue elems[SuList::MAX_ELEMENTS];
+    size_t count = 0;
+    
+    for (auto& e : expr->elements) {
+        if (count >= SuList::MAX_ELEMENTS) {
+            Token tok{TokenType::MY_EOF, "", std::any{}, 0};
+            throw RuntimeError(tok, "List too large (max 128 elements)");
+        }
+        elems[count++] = evaluate(e.get());
+    }
+    
+    SuList* list = SuList::fromArray(elems, count);
+    if (!list) {
+        Token tok{TokenType::MY_EOF, "", std::any{}, 0};
+        throw RuntimeError(tok, "Failed to create list");
+    }
+    return SuValue::make_obj(list);
+}
+
+SuValue Interpreter::visitListIndex(ListIndex* expr) {
+    SuValue listVal = evaluate(expr->list.get());
+    SuValue indexVal = evaluate(expr->index.get());
+    
+    if (!listVal.isList()) {
+        Token tok{TokenType::LEFT_BRACKET, "", std::any{}, 0};
+        throw RuntimeError(tok, "Cannot index non-list value (type: " + std::string(typeStr(listVal)) + ")");
+    }
+    
+    if (!indexVal.isInt()) {
+        Token tok{TokenType::LEFT_BRACKET, "", std::any{}, 0};
+        throw RuntimeError(tok, "List index must be an integer (got: " + std::string(typeStr(indexVal)) + ")");
+    }
+    
+    int64_t idx = indexVal.asInt();
+    SuList* list = listVal.asList();
+    
+    if (idx < 0 || idx >= static_cast<int64_t>(list->length)) {
+        Token tok{TokenType::LEFT_BRACKET, "", std::any{}, 0};
+        throw RuntimeError(tok, "List index out of bounds: " + std::to_string(idx) + " (size: " + std::to_string(list->length) + ")");
+    }
+    
+    return list->elements[idx];
 }
 
 void Interpreter::visitExpressionStmt(Statement::Expression* stmt){
